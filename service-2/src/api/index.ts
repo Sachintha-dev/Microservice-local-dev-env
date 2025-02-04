@@ -11,7 +11,7 @@ router.get("/", (_req, res) => {
 
   const responsePayload = {
     status: "🟢 healthy",
-    message: "✅ Response from True Love Backend NodeTS Server",
+    message: "✅ Response from Backend NodeTS Server-2",
     serverStartTime,
     currentTime,
     uptime: `${process.uptime()} seconds`,
