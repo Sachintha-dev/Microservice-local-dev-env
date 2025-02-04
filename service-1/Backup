@@ -1,0 +1,2517 @@
+--
+-- PostgreSQL database dump
+--
+
+-- Dumped from database version 16.4
+-- Dumped by pg_dump version 16.4
+
+-- Started on 2025-01-23 08:47:35 +0530
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+--
+-- TOC entry 2 (class 3079 OID 16997)
+-- Name: pgcrypto; Type: EXTENSION; Schema: -; Owner: -
+--
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public;
+
+
+--
+-- TOC entry 4675 (class 0 OID 0)
+-- Dependencies: 2
+-- Name: EXTENSION pgcrypto; Type: COMMENT; Schema: -; Owner: 
+--
+
+COMMENT ON EXTENSION pgcrypto IS 'cryptographic functions';
+
+
+--
+-- TOC entry 312 (class 1255 OID 17130)
+-- Name: get_partner_profile(integer, text); Type: FUNCTION; Schema: public; Owner: doadmin
+--
+
+CREATE FUNCTION public.get_partner_profile(user_id integer, passphrase text) RETURNS TABLE(matched_user_id bigint, first_name text, gender text, dob date, nic text, bio text, nic_verified boolean, status boolean, ethnicity_si text, ethnicity_ta text, ethnicity_en text, religion_si text, religion_ta text, religion_en text, edu_level_si text, edu_level_ta text, edu_level_en text, civil_status_si text, civil_status_ta text, civil_status_en text, caste_si text, caste_ta text, caste_en text, height_value text, food_pref_si text, food_pref_ta text, food_pref_en text, drinking_si text, drinking_ta text, drinking_en text, smoking_si text, smoking_ta text, smoking_en text, horoscope_si text, horoscope_ta text, horoscope_en text)
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        u.id AS matched_user_id,
+        pgp_sym_decrypt(u.first_name_enc, passphrase) AS first_name,
+        pgp_sym_decrypt(u.gender_enc, passphrase) AS gender,
+        CAST(
+            pgp_sym_decrypt(u.dob_enc, passphrase)
+            AS DATE
+        ) AS dob,
+        pgp_sym_decrypt(u.nic_enc, passphrase) AS nic,
+        pgp_sym_decrypt(u.bio_enc, passphrase) AS bio,
+        u.nic_verified,
+        CASE
+            WHEN u.status = 'active' THEN TRUE
+            WHEN u.status = 'inactive' THEN FALSE
+            ELSE NULL -- Handle unexpected values
+        END AS status, -- Map string to BOOLEAN
+        pgp_sym_decrypt(e.si_enc, passphrase) AS ethnicity_si,
+        pgp_sym_decrypt(e.ta_enc, passphrase) AS ethnicity_ta,
+        pgp_sym_decrypt(e.en_enc, passphrase) AS ethnicity_en,
+        pgp_sym_decrypt(r.si_enc, passphrase) AS religion_si,
+        pgp_sym_decrypt(r.ta_enc, passphrase) AS religion_ta,
+        pgp_sym_decrypt(r.en_enc, passphrase) AS religion_en,
+        pgp_sym_decrypt(ed.si_enc, passphrase) AS edu_level_si,
+        pgp_sym_decrypt(ed.ta_enc, passphrase) AS edu_level_ta,
+        pgp_sym_decrypt(ed.en_enc, passphrase) AS edu_level_en,
+        pgp_sym_decrypt(cs.si_enc, passphrase) AS civil_status_si,
+        pgp_sym_decrypt(cs.ta_enc, passphrase) AS civil_status_ta,
+        pgp_sym_decrypt(cs.en_enc, passphrase) AS civil_status_en,
+        pgp_sym_decrypt(ca.si_enc, passphrase) AS caste_si,
+        pgp_sym_decrypt(ca.ta_enc, passphrase) AS caste_ta,
+        pgp_sym_decrypt(ca.en_enc, passphrase) AS caste_en,
+        pgp_sym_decrypt(h.value_enc, passphrase) AS height_value,
+        pgp_sym_decrypt(fp.si_enc, passphrase) AS food_pref_si,
+        pgp_sym_decrypt(fp.ta_enc, passphrase) AS food_pref_ta,
+        pgp_sym_decrypt(fp.en_enc, passphrase) AS food_pref_en,
+        pgp_sym_decrypt(dk.si_enc, passphrase) AS drinking_si,
+        pgp_sym_decrypt(dk.ta_enc, passphrase) AS drinking_ta,
+        pgp_sym_decrypt(dk.en_enc, passphrase) AS drinking_en,
+        pgp_sym_decrypt(sm.si_enc, passphrase) AS smoking_si,
+        pgp_sym_decrypt(sm.ta_enc, passphrase) AS smoking_ta,
+        pgp_sym_decrypt(sm.en_enc, passphrase) AS smoking_en,
+        pgp_sym_decrypt(hm.si_enc, passphrase) AS horoscope_si,
+        pgp_sym_decrypt(hm.ta_enc, passphrase) AS horoscope_ta,
+        pgp_sym_decrypt(hm.en_enc, passphrase) AS horoscope_en
+    FROM partner_profile pp
+    JOIN "user" u ON (
+        pgp_sym_decrypt(u.gender_enc, passphrase) =
+        pgp_sym_decrypt(pp.gender_enc, passphrase)
+        AND EXTRACT(
+            YEAR FROM age(
+                CAST(
+                    pgp_sym_decrypt(u.dob_enc, passphrase)
+                    AS DATE
+                )
+            )
+        ) BETWEEN pp.min_age AND pp.max_age
+        AND u.ethnicity_id = pp.ethnicity_id
+        AND u.religion_id = pp.religion_id
+        AND u.edu_level_id = pp.edu_level_id
+        AND u.nic_verified = pp.nic_verified
+        AND u.caste_id = pp.caste_id
+        AND u.civil_status_id = pp.civil_status_id
+        AND u.height_id = pp.height_id
+        AND u.food_preference_id = pp.food_preference_id
+        AND u.drinking_id = pp.drinking_id
+        AND u.smoking_id = pp.smoking_id
+        AND u.horoscope_matching_id = pp.horoscope_matching_id
+    )
+    LEFT JOIN ethnicity e ON u.ethnicity_id = e.id
+    LEFT JOIN religion r ON u.religion_id = r.id
+    LEFT JOIN edu_level ed ON u.edu_level_id = ed.id
+    LEFT JOIN civil_status cs ON u.civil_status_id = cs.id
+    LEFT JOIN caste ca ON u.caste_id = ca.id
+    LEFT JOIN height h ON u.height_id = h.id
+    LEFT JOIN food_preference fp ON u.food_preference_id = fp.id
+    LEFT JOIN drinking dk ON u.drinking_id = dk.id
+    LEFT JOIN smoking sm ON u.smoking_id = sm.id
+    LEFT JOIN horoscope_matching hm ON u.horoscope_matching_id = hm.id
+    WHERE pp.user_id = get_partner_profile.user_id;
+END;
+$$;
+
+
+ALTER FUNCTION public.get_partner_profile(user_id integer, passphrase text) OWNER TO doadmin;
+
+--
+-- TOC entry 313 (class 1255 OID 17133)
+-- Name: get_partner_profiles(text, integer, text, integer, integer); Type: FUNCTION; Schema: public; Owner: doadmin
+--
+
+CREATE FUNCTION public.get_partner_profiles(lang text, userid integer, secrettruelove text, row_limit integer, page integer) RETURNS TABLE(matched_user_id bigint, first_name text, dob date, gender text, nic text, bio text, nic_verified boolean, status text, ethnicity text, religion text, edu_level text, civil_status text, caste text, height_value text, food_preference text, drinking text, smoking text, horoscope text, total_results bigint)
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        u.id AS matched_user_id,
+        pgp_sym_decrypt(u.first_name_enc, secretTrueLove) AS first_name,
+        CAST(pgp_sym_decrypt(u.dob_enc, secretTrueLove) AS DATE) AS dob,
+        pgp_sym_decrypt(u.gender_enc, secretTrueLove) AS gender,
+        pgp_sym_decrypt(u.nic_enc, secretTrueLove) AS nic,
+        pgp_sym_decrypt(u.bio_enc, secretTrueLove) AS bio,
+        u.nic_verified,
+        u.status::TEXT AS status, -- Explicit cast to TEXT
+
+        -- Ethnicity
+        CASE lang
+            WHEN 'si' THEN pgp_sym_decrypt(e.si_enc, secretTrueLove)
+            WHEN 'ta' THEN pgp_sym_decrypt(e.ta_enc, secretTrueLove)
+            WHEN 'en' THEN pgp_sym_decrypt(e.en_enc, secretTrueLove)
+            ELSE NULL
+        END AS ethnicity,
+
+        -- Religion
+        CASE lang
+            WHEN 'si' THEN pgp_sym_decrypt(r.si_enc, secretTrueLove)
+            WHEN 'ta' THEN pgp_sym_decrypt(r.ta_enc, secretTrueLove)
+            WHEN 'en' THEN pgp_sym_decrypt(r.en_enc, secretTrueLove)
+            ELSE NULL
+        END AS religion,
+
+        -- Education Level
+        CASE lang
+            WHEN 'si' THEN pgp_sym_decrypt(ed.si_enc, secretTrueLove)
+            WHEN 'ta' THEN pgp_sym_decrypt(ed.ta_enc, secretTrueLove)
+            WHEN 'en' THEN pgp_sym_decrypt(ed.en_enc, secretTrueLove)
+            ELSE NULL
+        END AS edu_level,
+
+        -- Civil Status
+        CASE lang
+            WHEN 'si' THEN pgp_sym_decrypt(cs.si_enc, secretTrueLove)
+            WHEN 'ta' THEN pgp_sym_decrypt(cs.ta_enc, secretTrueLove)
+            WHEN 'en' THEN pgp_sym_decrypt(cs.en_enc, secretTrueLove)
+            ELSE NULL
+        END AS civil_status,
+
+        -- Caste
+        CASE lang
+            WHEN 'si' THEN pgp_sym_decrypt(ca.si_enc, secretTrueLove)
+            WHEN 'ta' THEN pgp_sym_decrypt(ca.ta_enc, secretTrueLove)
+            WHEN 'en' THEN pgp_sym_decrypt(ca.en_enc, secretTrueLove)
+            ELSE NULL
+        END AS caste,
+
+        -- Height
+        pgp_sym_decrypt(h.value_enc, secretTrueLove) AS height_value,
+
+        -- Food Preference
+        CASE lang
+            WHEN 'si' THEN pgp_sym_decrypt(fp.si_enc, secretTrueLove)
+            WHEN 'ta' THEN pgp_sym_decrypt(fp.ta_enc, secretTrueLove)
+            WHEN 'en' THEN pgp_sym_decrypt(fp.en_enc, secretTrueLove)
+            ELSE NULL
+        END AS food_preference,
+
+        -- Drinking
+        CASE lang
+            WHEN 'si' THEN pgp_sym_decrypt(dk.si_enc, secretTrueLove)
+            WHEN 'ta' THEN pgp_sym_decrypt(dk.ta_enc, secretTrueLove)
+            WHEN 'en' THEN pgp_sym_decrypt(dk.en_enc, secretTrueLove)
+            ELSE NULL
+        END AS drinking,
+
+        -- Smoking
+        CASE lang
+            WHEN 'si' THEN pgp_sym_decrypt(sm.si_enc, secretTrueLove)
+            WHEN 'ta' THEN pgp_sym_decrypt(sm.ta_enc, secretTrueLove)
+            WHEN 'en' THEN pgp_sym_decrypt(sm.en_enc, secretTrueLove)
+            ELSE NULL
+        END AS smoking,
+
+        -- Horoscope
+        CASE lang
+            WHEN 'si' THEN pgp_sym_decrypt(hm.si_enc, secretTrueLove)
+            WHEN 'ta' THEN pgp_sym_decrypt(hm.ta_enc, secretTrueLove)
+            WHEN 'en' THEN pgp_sym_decrypt(hm.en_enc, secretTrueLove)
+            ELSE NULL
+        END AS horoscope,
+
+        -- Total count of matching results
+        COUNT(*) OVER() AS total_results
+
+    FROM partner_profile pp
+    JOIN "user" u ON (
+        pgp_sym_decrypt(u.gender_enc, secretTrueLove)
+          = pgp_sym_decrypt(pp.gender_enc, secretTrueLove)
+        AND EXTRACT(
+            YEAR FROM age(
+                CAST(pgp_sym_decrypt(u.dob_enc, secretTrueLove) AS DATE)
+            )
+        ) BETWEEN pp.min_age AND pp.max_age
+        AND u.ethnicity_id           = pp.ethnicity_id
+        AND u.religion_id            = pp.religion_id
+        AND u.edu_level_id           = pp.edu_level_id
+        AND u.nic_verified           = pp.nic_verified
+        AND u.caste_id               = pp.caste_id
+        AND u.civil_status_id        = pp.civil_status_id
+        AND u.height_id              = pp.height_id
+        AND u.food_preference_id     = pp.food_preference_id
+        AND u.drinking_id            = pp.drinking_id
+        AND u.smoking_id             = pp.smoking_id
+        AND u.horoscope_matching_id  = pp.horoscope_matching_id
+    )
+    LEFT JOIN ethnicity          e  ON u.ethnicity_id          = e.id
+    LEFT JOIN religion           r  ON u.religion_id           = r.id
+    LEFT JOIN edu_level          ed ON u.edu_level_id          = ed.id
+    LEFT JOIN civil_status       cs ON u.civil_status_id       = cs.id
+    LEFT JOIN caste              ca ON u.caste_id              = ca.id
+    LEFT JOIN height             h  ON u.height_id             = h.id
+    LEFT JOIN food_preference    fp ON u.food_preference_id    = fp.id
+    LEFT JOIN drinking           dk ON u.drinking_id           = dk.id
+    LEFT JOIN smoking            sm ON u.smoking_id           = sm.id
+    LEFT JOIN horoscope_matching hm ON u.horoscope_matching_id = hm.id
+    WHERE pp.user_id = userId AND u.status = 'active'
+
+    -- Pagination
+    LIMIT row_limit OFFSET ((page - 1) * row_limit);
+END;
+$$;
+
+
+ALTER FUNCTION public.get_partner_profiles(lang text, userid integer, secrettruelove text, row_limit integer, page integer) OWNER TO doadmin;
+
+--
+-- TOC entry 311 (class 1255 OID 17126)
+-- Name: get_user(integer, text); Type: FUNCTION; Schema: public; Owner: doadmin
+--
+
+CREATE FUNCTION public.get_user(_id integer, _passphrase text) RETURNS TABLE(id integer, name text, dob date)
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    RETURN QUERY
+    SELECT users.id, 
+           pgp_sym_decrypt(users.name::BYTEA, _passphrase) AS name, 
+           users.dob
+    FROM users
+    WHERE users.id = _id;
+END;
+$$;
+
+
+ALTER FUNCTION public.get_user(_id integer, _passphrase text) OWNER TO doadmin;
+
+--
+-- TOC entry 310 (class 1255 OID 17125)
+-- Name: insert_user(text, date, text); Type: FUNCTION; Schema: public; Owner: doadmin
+--
+
+CREATE FUNCTION public.insert_user(_name text, _dob date, _passphrase text) RETURNS void
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    INSERT INTO users (name, dob)
+    VALUES (pgp_sym_encrypt(_name, _passphrase), _dob);
+END;
+$$;
+
+
+ALTER FUNCTION public.insert_user(_name text, _dob date, _passphrase text) OWNER TO doadmin;
+
+SET default_tablespace = '';
+
+SET default_table_access_method = heap;
+
+--
+-- TOC entry 243 (class 1259 OID 16812)
+-- Name: caste; Type: TABLE; Schema: public; Owner: doadmin
+--
+
+CREATE TABLE public.caste (
+    id integer NOT NULL,
+    si_enc bytea,
+    ta_enc bytea,
+    en_enc bytea,
+    ethnicity_id integer
+);
+
+
+ALTER TABLE public.caste OWNER TO doadmin;
+
+--
+-- TOC entry 242 (class 1259 OID 16811)
+-- Name: caste_id_seq; Type: SEQUENCE; Schema: public; Owner: doadmin
+--
+
+CREATE SEQUENCE public.caste_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.caste_id_seq OWNER TO doadmin;
+
+--
+-- TOC entry 4676 (class 0 OID 0)
+-- Dependencies: 242
+-- Name: caste_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doadmin
+--
+
+ALTER SEQUENCE public.caste_id_seq OWNED BY public.caste.id;
+
+
+--
+-- TOC entry 219 (class 1259 OID 16699)
+-- Name: city; Type: TABLE; Schema: public; Owner: doadmin
+--
+
+CREATE TABLE public.city (
+    id integer NOT NULL,
+    si_enc bytea,
+    ta_enc bytea,
+    en_enc bytea,
+    country_id integer NOT NULL
+);
+
+
+ALTER TABLE public.city OWNER TO doadmin;
+
+--
+-- TOC entry 218 (class 1259 OID 16698)
+-- Name: city_id_seq; Type: SEQUENCE; Schema: public; Owner: doadmin
+--
+
+CREATE SEQUENCE public.city_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.city_id_seq OWNER TO doadmin;
+
+--
+-- TOC entry 4677 (class 0 OID 0)
+-- Dependencies: 218
+-- Name: city_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doadmin
+--
+
+ALTER SEQUENCE public.city_id_seq OWNED BY public.city.id;
+
+
+--
+-- TOC entry 227 (class 1259 OID 16740)
+-- Name: civil_status; Type: TABLE; Schema: public; Owner: doadmin
+--
+
+CREATE TABLE public.civil_status (
+    id integer NOT NULL,
+    si_enc bytea,
+    ta_enc bytea,
+    en_enc bytea
+);
+
+
+ALTER TABLE public.civil_status OWNER TO doadmin;
+
+--
+-- TOC entry 226 (class 1259 OID 16739)
+-- Name: civil_status_id_seq; Type: SEQUENCE; Schema: public; Owner: doadmin
+--
+
+CREATE SEQUENCE public.civil_status_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.civil_status_id_seq OWNER TO doadmin;
+
+--
+-- TOC entry 4678 (class 0 OID 0)
+-- Dependencies: 226
+-- Name: civil_status_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doadmin
+--
+
+ALTER SEQUENCE public.civil_status_id_seq OWNED BY public.civil_status.id;
+
+
+--
+-- TOC entry 217 (class 1259 OID 16690)
+-- Name: country; Type: TABLE; Schema: public; Owner: doadmin
+--
+
+CREATE TABLE public.country (
+    id integer NOT NULL,
+    si_enc bytea,
+    ta_enc bytea,
+    en_enc bytea,
+    phone_code_enc bytea
+);
+
+
+ALTER TABLE public.country OWNER TO doadmin;
+
+--
+-- TOC entry 216 (class 1259 OID 16689)
+-- Name: country_id_seq; Type: SEQUENCE; Schema: public; Owner: doadmin
+--
+
+CREATE SEQUENCE public.country_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.country_id_seq OWNER TO doadmin;
+
+--
+-- TOC entry 4679 (class 0 OID 0)
+-- Dependencies: 216
+-- Name: country_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doadmin
+--
+
+ALTER SEQUENCE public.country_id_seq OWNED BY public.country.id;
+
+
+--
+-- TOC entry 235 (class 1259 OID 16776)
+-- Name: drinking; Type: TABLE; Schema: public; Owner: doadmin
+--
+
+CREATE TABLE public.drinking (
+    id integer NOT NULL,
+    si_enc bytea,
+    ta_enc bytea,
+    en_enc bytea
+);
+
+
+ALTER TABLE public.drinking OWNER TO doadmin;
+
+--
+-- TOC entry 234 (class 1259 OID 16775)
+-- Name: drinking_id_seq; Type: SEQUENCE; Schema: public; Owner: doadmin
+--
+
+CREATE SEQUENCE public.drinking_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.drinking_id_seq OWNER TO doadmin;
+
+--
+-- TOC entry 4680 (class 0 OID 0)
+-- Dependencies: 234
+-- Name: drinking_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doadmin
+--
+
+ALTER SEQUENCE public.drinking_id_seq OWNED BY public.drinking.id;
+
+
+--
+-- TOC entry 225 (class 1259 OID 16731)
+-- Name: edu_level; Type: TABLE; Schema: public; Owner: doadmin
+--
+
+CREATE TABLE public.edu_level (
+    id integer NOT NULL,
+    si_enc bytea,
+    ta_enc bytea,
+    en_enc bytea
+);
+
+
+ALTER TABLE public.edu_level OWNER TO doadmin;
+
+--
+-- TOC entry 224 (class 1259 OID 16730)
+-- Name: edu_level_id_seq; Type: SEQUENCE; Schema: public; Owner: doadmin
+--
+
+CREATE SEQUENCE public.edu_level_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.edu_level_id_seq OWNER TO doadmin;
+
+--
+-- TOC entry 4681 (class 0 OID 0)
+-- Dependencies: 224
+-- Name: edu_level_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doadmin
+--
+
+ALTER SEQUENCE public.edu_level_id_seq OWNED BY public.edu_level.id;
+
+
+--
+-- TOC entry 221 (class 1259 OID 16713)
+-- Name: ethnicity; Type: TABLE; Schema: public; Owner: doadmin
+--
+
+CREATE TABLE public.ethnicity (
+    id integer NOT NULL,
+    si_enc bytea,
+    ta_enc bytea,
+    en_enc bytea
+);
+
+
+ALTER TABLE public.ethnicity OWNER TO doadmin;
+
+--
+-- TOC entry 220 (class 1259 OID 16712)
+-- Name: ethnicity_id_seq; Type: SEQUENCE; Schema: public; Owner: doadmin
+--
+
+CREATE SEQUENCE public.ethnicity_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.ethnicity_id_seq OWNER TO doadmin;
+
+--
+-- TOC entry 4682 (class 0 OID 0)
+-- Dependencies: 220
+-- Name: ethnicity_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doadmin
+--
+
+ALTER SEQUENCE public.ethnicity_id_seq OWNED BY public.ethnicity.id;
+
+
+--
+-- TOC entry 233 (class 1259 OID 16767)
+-- Name: food_preference; Type: TABLE; Schema: public; Owner: doadmin
+--
+
+CREATE TABLE public.food_preference (
+    id integer NOT NULL,
+    si_enc bytea,
+    ta_enc bytea,
+    en_enc bytea
+);
+
+
+ALTER TABLE public.food_preference OWNER TO doadmin;
+
+--
+-- TOC entry 232 (class 1259 OID 16766)
+-- Name: food_preference_id_seq; Type: SEQUENCE; Schema: public; Owner: doadmin
+--
+
+CREATE SEQUENCE public.food_preference_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.food_preference_id_seq OWNER TO doadmin;
+
+--
+-- TOC entry 4683 (class 0 OID 0)
+-- Dependencies: 232
+-- Name: food_preference_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doadmin
+--
+
+ALTER SEQUENCE public.food_preference_id_seq OWNED BY public.food_preference.id;
+
+
+--
+-- TOC entry 249 (class 1259 OID 16920)
+-- Name: hearts; Type: TABLE; Schema: public; Owner: doadmin
+--
+
+CREATE TABLE public.hearts (
+    id integer NOT NULL,
+    user_id bigint NOT NULL,
+    free_hearts integer DEFAULT 5,
+    paid_hearts integer DEFAULT 0
+);
+
+
+ALTER TABLE public.hearts OWNER TO doadmin;
+
+--
+-- TOC entry 248 (class 1259 OID 16919)
+-- Name: hearts_id_seq; Type: SEQUENCE; Schema: public; Owner: doadmin
+--
+
+CREATE SEQUENCE public.hearts_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.hearts_id_seq OWNER TO doadmin;
+
+--
+-- TOC entry 4684 (class 0 OID 0)
+-- Dependencies: 248
+-- Name: hearts_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doadmin
+--
+
+ALTER SEQUENCE public.hearts_id_seq OWNED BY public.hearts.id;
+
+
+--
+-- TOC entry 231 (class 1259 OID 16758)
+-- Name: height; Type: TABLE; Schema: public; Owner: doadmin
+--
+
+CREATE TABLE public.height (
+    id integer NOT NULL,
+    value_enc bytea
+);
+
+
+ALTER TABLE public.height OWNER TO doadmin;
+
+--
+-- TOC entry 230 (class 1259 OID 16757)
+-- Name: height_id_seq; Type: SEQUENCE; Schema: public; Owner: doadmin
+--
+
+CREATE SEQUENCE public.height_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.height_id_seq OWNER TO doadmin;
+
+--
+-- TOC entry 4685 (class 0 OID 0)
+-- Dependencies: 230
+-- Name: height_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doadmin
+--
+
+ALTER SEQUENCE public.height_id_seq OWNED BY public.height.id;
+
+
+--
+-- TOC entry 239 (class 1259 OID 16794)
+-- Name: horoscope_matching; Type: TABLE; Schema: public; Owner: doadmin
+--
+
+CREATE TABLE public.horoscope_matching (
+    id integer NOT NULL,
+    si_enc bytea,
+    ta_enc bytea,
+    en_enc bytea
+);
+
+
+ALTER TABLE public.horoscope_matching OWNER TO doadmin;
+
+--
+-- TOC entry 238 (class 1259 OID 16793)
+-- Name: horoscope_matching_id_seq; Type: SEQUENCE; Schema: public; Owner: doadmin
+--
+
+CREATE SEQUENCE public.horoscope_matching_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.horoscope_matching_id_seq OWNER TO doadmin;
+
+--
+-- TOC entry 4686 (class 0 OID 0)
+-- Dependencies: 238
+-- Name: horoscope_matching_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doadmin
+--
+
+ALTER SEQUENCE public.horoscope_matching_id_seq OWNED BY public.horoscope_matching.id;
+
+
+--
+-- TOC entry 241 (class 1259 OID 16803)
+-- Name: interests_list; Type: TABLE; Schema: public; Owner: doadmin
+--
+
+CREATE TABLE public.interests_list (
+    id integer NOT NULL,
+    si_enc bytea,
+    ta_enc bytea,
+    en_enc bytea
+);
+
+
+ALTER TABLE public.interests_list OWNER TO doadmin;
+
+--
+-- TOC entry 240 (class 1259 OID 16802)
+-- Name: interests_list_id_seq; Type: SEQUENCE; Schema: public; Owner: doadmin
+--
+
+CREATE SEQUENCE public.interests_list_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.interests_list_id_seq OWNER TO doadmin;
+
+--
+-- TOC entry 4687 (class 0 OID 0)
+-- Dependencies: 240
+-- Name: interests_list_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doadmin
+--
+
+ALTER SEQUENCE public.interests_list_id_seq OWNED BY public.interests_list.id;
+
+
+--
+-- TOC entry 253 (class 1259 OID 16952)
+-- Name: packages; Type: TABLE; Schema: public; Owner: doadmin
+--
+
+CREATE TABLE public.packages (
+    id integer NOT NULL,
+    si_enc bytea,
+    ta_enc bytea,
+    en_enc bytea,
+    amount numeric(10,2) NOT NULL,
+    no_of_hearts integer NOT NULL,
+    status character varying(50)
+);
+
+
+ALTER TABLE public.packages OWNER TO doadmin;
+
+--
+-- TOC entry 252 (class 1259 OID 16951)
+-- Name: packages_id_seq; Type: SEQUENCE; Schema: public; Owner: doadmin
+--
+
+CREATE SEQUENCE public.packages_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.packages_id_seq OWNER TO doadmin;
+
+--
+-- TOC entry 4688 (class 0 OID 0)
+-- Dependencies: 252
+-- Name: packages_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doadmin
+--
+
+ALTER SEQUENCE public.packages_id_seq OWNED BY public.packages.id;
+
+
+--
+-- TOC entry 259 (class 1259 OID 17036)
+-- Name: partner_profile; Type: TABLE; Schema: public; Owner: doadmin
+--
+
+CREATE TABLE public.partner_profile (
+    id bigint NOT NULL,
+    user_id bigint NOT NULL,
+    min_age integer,
+    max_age integer,
+    gender_enc bytea,
+    ethnicity_id integer,
+    religion_id integer,
+    edu_level_id integer,
+    nic_verified boolean DEFAULT false,
+    caste_id integer,
+    civil_status_id integer,
+    height_id integer,
+    food_preference_id integer,
+    drinking_id integer,
+    smoking_id integer,
+    horoscope_matching_id integer
+);
+
+
+ALTER TABLE public.partner_profile OWNER TO doadmin;
+
+--
+-- TOC entry 258 (class 1259 OID 17035)
+-- Name: partner_profile_id_seq; Type: SEQUENCE; Schema: public; Owner: doadmin
+--
+
+CREATE SEQUENCE public.partner_profile_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.partner_profile_id_seq OWNER TO doadmin;
+
+--
+-- TOC entry 4689 (class 0 OID 0)
+-- Dependencies: 258
+-- Name: partner_profile_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doadmin
+--
+
+ALTER SEQUENCE public.partner_profile_id_seq OWNED BY public.partner_profile.id;
+
+
+--
+-- TOC entry 229 (class 1259 OID 16749)
+-- Name: profession; Type: TABLE; Schema: public; Owner: doadmin
+--
+
+CREATE TABLE public.profession (
+    id integer NOT NULL,
+    si_enc bytea,
+    ta_enc bytea,
+    en_enc bytea
+);
+
+
+ALTER TABLE public.profession OWNER TO doadmin;
+
+--
+-- TOC entry 228 (class 1259 OID 16748)
+-- Name: profession_id_seq; Type: SEQUENCE; Schema: public; Owner: doadmin
+--
+
+CREATE SEQUENCE public.profession_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.profession_id_seq OWNER TO doadmin;
+
+--
+-- TOC entry 4690 (class 0 OID 0)
+-- Dependencies: 228
+-- Name: profession_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doadmin
+--
+
+ALTER SEQUENCE public.profession_id_seq OWNED BY public.profession.id;
+
+
+--
+-- TOC entry 223 (class 1259 OID 16722)
+-- Name: religion; Type: TABLE; Schema: public; Owner: doadmin
+--
+
+CREATE TABLE public.religion (
+    id integer NOT NULL,
+    si_enc bytea,
+    ta_enc bytea,
+    en_enc bytea
+);
+
+
+ALTER TABLE public.religion OWNER TO doadmin;
+
+--
+-- TOC entry 222 (class 1259 OID 16721)
+-- Name: religion_id_seq; Type: SEQUENCE; Schema: public; Owner: doadmin
+--
+
+CREATE SEQUENCE public.religion_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.religion_id_seq OWNER TO doadmin;
+
+--
+-- TOC entry 4691 (class 0 OID 0)
+-- Dependencies: 222
+-- Name: religion_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doadmin
+--
+
+ALTER SEQUENCE public.religion_id_seq OWNED BY public.religion.id;
+
+
+--
+-- TOC entry 257 (class 1259 OID 16979)
+-- Name: report_users; Type: TABLE; Schema: public; Owner: doadmin
+--
+
+CREATE TABLE public.report_users (
+    id integer NOT NULL,
+    report_user_id bigint NOT NULL,
+    reporter_id bigint NOT NULL,
+    reason_enc bytea
+);
+
+
+ALTER TABLE public.report_users OWNER TO doadmin;
+
+--
+-- TOC entry 256 (class 1259 OID 16978)
+-- Name: report_users_id_seq; Type: SEQUENCE; Schema: public; Owner: doadmin
+--
+
+CREATE SEQUENCE public.report_users_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.report_users_id_seq OWNER TO doadmin;
+
+--
+-- TOC entry 4692 (class 0 OID 0)
+-- Dependencies: 256
+-- Name: report_users_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doadmin
+--
+
+ALTER SEQUENCE public.report_users_id_seq OWNED BY public.report_users.id;
+
+
+--
+-- TOC entry 260 (class 1259 OID 17108)
+-- Name: session; Type: TABLE; Schema: public; Owner: doadmin
+--
+
+CREATE TABLE public.session (
+    sid character varying NOT NULL,
+    sess json NOT NULL,
+    expire timestamp(6) without time zone NOT NULL
+);
+
+
+ALTER TABLE public.session OWNER TO doadmin;
+
+--
+-- TOC entry 237 (class 1259 OID 16785)
+-- Name: smoking; Type: TABLE; Schema: public; Owner: doadmin
+--
+
+CREATE TABLE public.smoking (
+    id integer NOT NULL,
+    si_enc bytea,
+    ta_enc bytea,
+    en_enc bytea
+);
+
+
+ALTER TABLE public.smoking OWNER TO doadmin;
+
+--
+-- TOC entry 236 (class 1259 OID 16784)
+-- Name: smoking_id_seq; Type: SEQUENCE; Schema: public; Owner: doadmin
+--
+
+CREATE SEQUENCE public.smoking_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.smoking_id_seq OWNER TO doadmin;
+
+--
+-- TOC entry 4693 (class 0 OID 0)
+-- Dependencies: 236
+-- Name: smoking_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doadmin
+--
+
+ALTER SEQUENCE public.smoking_id_seq OWNED BY public.smoking.id;
+
+
+--
+-- TOC entry 255 (class 1259 OID 16961)
+-- Name: transactions; Type: TABLE; Schema: public; Owner: doadmin
+--
+
+CREATE TABLE public.transactions (
+    id integer NOT NULL,
+    user_id bigint NOT NULL,
+    package_id integer NOT NULL,
+    amount numeric(10,2) NOT NULL,
+    no_of_hearts integer NOT NULL,
+    created_at timestamp without time zone DEFAULT now()
+);
+
+
+ALTER TABLE public.transactions OWNER TO doadmin;
+
+--
+-- TOC entry 254 (class 1259 OID 16960)
+-- Name: transactions_id_seq; Type: SEQUENCE; Schema: public; Owner: doadmin
+--
+
+CREATE SEQUENCE public.transactions_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.transactions_id_seq OWNER TO doadmin;
+
+--
+-- TOC entry 4694 (class 0 OID 0)
+-- Dependencies: 254
+-- Name: transactions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doadmin
+--
+
+ALTER SEQUENCE public.transactions_id_seq OWNED BY public.transactions.id;
+
+
+--
+-- TOC entry 245 (class 1259 OID 16826)
+-- Name: user; Type: TABLE; Schema: public; Owner: doadmin
+--
+
+CREATE TABLE public."user" (
+    id bigint NOT NULL,
+    first_name_enc bytea,
+    dob_enc bytea,
+    gender_enc bytea,
+    ethnicity_id integer,
+    religion_id integer,
+    edu_level_id integer,
+    country_id integer,
+    city_id integer,
+    caste_id integer,
+    civil_status_id integer,
+    profession_id integer,
+    height_id integer,
+    food_preference_id integer,
+    drinking_id integer,
+    smoking_id integer,
+    horoscope_matching_id integer,
+    male_siblings integer DEFAULT 0,
+    female_siblings integer DEFAULT 0,
+    nic_enc bytea,
+    bio_enc bytea,
+    status character varying(50),
+    nic_verified boolean DEFAULT false
+);
+
+
+ALTER TABLE public."user" OWNER TO doadmin;
+
+--
+-- TOC entry 244 (class 1259 OID 16825)
+-- Name: user_id_seq; Type: SEQUENCE; Schema: public; Owner: doadmin
+--
+
+CREATE SEQUENCE public.user_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.user_id_seq OWNER TO doadmin;
+
+--
+-- TOC entry 4695 (class 0 OID 0)
+-- Dependencies: 244
+-- Name: user_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doadmin
+--
+
+ALTER SEQUENCE public.user_id_seq OWNED BY public."user".id;
+
+
+--
+-- TOC entry 247 (class 1259 OID 16903)
+-- Name: user_interests; Type: TABLE; Schema: public; Owner: doadmin
+--
+
+CREATE TABLE public.user_interests (
+    id integer NOT NULL,
+    user_id bigint NOT NULL,
+    interest_id integer NOT NULL
+);
+
+
+ALTER TABLE public.user_interests OWNER TO doadmin;
+
+--
+-- TOC entry 246 (class 1259 OID 16902)
+-- Name: user_interests_id_seq; Type: SEQUENCE; Schema: public; Owner: doadmin
+--
+
+CREATE SEQUENCE public.user_interests_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.user_interests_id_seq OWNER TO doadmin;
+
+--
+-- TOC entry 4696 (class 0 OID 0)
+-- Dependencies: 246
+-- Name: user_interests_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doadmin
+--
+
+ALTER SEQUENCE public.user_interests_id_seq OWNED BY public.user_interests.id;
+
+
+--
+-- TOC entry 251 (class 1259 OID 16934)
+-- Name: user_requests; Type: TABLE; Schema: public; Owner: doadmin
+--
+
+CREATE TABLE public.user_requests (
+    id integer NOT NULL,
+    sender_id bigint NOT NULL,
+    receiver_id bigint NOT NULL,
+    created_at timestamp without time zone DEFAULT now()
+);
+
+
+ALTER TABLE public.user_requests OWNER TO doadmin;
+
+--
+-- TOC entry 250 (class 1259 OID 16933)
+-- Name: user_requests_id_seq; Type: SEQUENCE; Schema: public; Owner: doadmin
+--
+
+CREATE SEQUENCE public.user_requests_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.user_requests_id_seq OWNER TO doadmin;
+
+--
+-- TOC entry 4697 (class 0 OID 0)
+-- Dependencies: 250
+-- Name: user_requests_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doadmin
+--
+
+ALTER SEQUENCE public.user_requests_id_seq OWNED BY public.user_requests.id;
+
+
+--
+-- TOC entry 262 (class 1259 OID 17117)
+-- Name: users; Type: TABLE; Schema: public; Owner: doadmin
+--
+
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    name bytea,
+    dob date
+);
+
+
+ALTER TABLE public.users OWNER TO doadmin;
+
+--
+-- TOC entry 261 (class 1259 OID 17116)
+-- Name: users_id_seq; Type: SEQUENCE; Schema: public; Owner: doadmin
+--
+
+CREATE SEQUENCE public.users_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.users_id_seq OWNER TO doadmin;
+
+--
+-- TOC entry 4698 (class 0 OID 0)
+-- Dependencies: 261
+-- Name: users_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: doadmin
+--
+
+ALTER SEQUENCE public.users_id_seq OWNED BY public.users.id;
+
+
+--
+-- TOC entry 4378 (class 2604 OID 16815)
+-- Name: caste id; Type: DEFAULT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.caste ALTER COLUMN id SET DEFAULT nextval('public.caste_id_seq'::regclass);
+
+
+--
+-- TOC entry 4366 (class 2604 OID 16702)
+-- Name: city id; Type: DEFAULT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.city ALTER COLUMN id SET DEFAULT nextval('public.city_id_seq'::regclass);
+
+
+--
+-- TOC entry 4370 (class 2604 OID 16743)
+-- Name: civil_status id; Type: DEFAULT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.civil_status ALTER COLUMN id SET DEFAULT nextval('public.civil_status_id_seq'::regclass);
+
+
+--
+-- TOC entry 4365 (class 2604 OID 16693)
+-- Name: country id; Type: DEFAULT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.country ALTER COLUMN id SET DEFAULT nextval('public.country_id_seq'::regclass);
+
+
+--
+-- TOC entry 4374 (class 2604 OID 16779)
+-- Name: drinking id; Type: DEFAULT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.drinking ALTER COLUMN id SET DEFAULT nextval('public.drinking_id_seq'::regclass);
+
+
+--
+-- TOC entry 4369 (class 2604 OID 16734)
+-- Name: edu_level id; Type: DEFAULT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.edu_level ALTER COLUMN id SET DEFAULT nextval('public.edu_level_id_seq'::regclass);
+
+
+--
+-- TOC entry 4367 (class 2604 OID 16716)
+-- Name: ethnicity id; Type: DEFAULT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.ethnicity ALTER COLUMN id SET DEFAULT nextval('public.ethnicity_id_seq'::regclass);
+
+
+--
+-- TOC entry 4373 (class 2604 OID 16770)
+-- Name: food_preference id; Type: DEFAULT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.food_preference ALTER COLUMN id SET DEFAULT nextval('public.food_preference_id_seq'::regclass);
+
+
+--
+-- TOC entry 4384 (class 2604 OID 16923)
+-- Name: hearts id; Type: DEFAULT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.hearts ALTER COLUMN id SET DEFAULT nextval('public.hearts_id_seq'::regclass);
+
+
+--
+-- TOC entry 4372 (class 2604 OID 16761)
+-- Name: height id; Type: DEFAULT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.height ALTER COLUMN id SET DEFAULT nextval('public.height_id_seq'::regclass);
+
+
+--
+-- TOC entry 4376 (class 2604 OID 16797)
+-- Name: horoscope_matching id; Type: DEFAULT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.horoscope_matching ALTER COLUMN id SET DEFAULT nextval('public.horoscope_matching_id_seq'::regclass);
+
+
+--
+-- TOC entry 4377 (class 2604 OID 16806)
+-- Name: interests_list id; Type: DEFAULT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.interests_list ALTER COLUMN id SET DEFAULT nextval('public.interests_list_id_seq'::regclass);
+
+
+--
+-- TOC entry 4389 (class 2604 OID 16955)
+-- Name: packages id; Type: DEFAULT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.packages ALTER COLUMN id SET DEFAULT nextval('public.packages_id_seq'::regclass);
+
+
+--
+-- TOC entry 4393 (class 2604 OID 17039)
+-- Name: partner_profile id; Type: DEFAULT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.partner_profile ALTER COLUMN id SET DEFAULT nextval('public.partner_profile_id_seq'::regclass);
+
+
+--
+-- TOC entry 4371 (class 2604 OID 16752)
+-- Name: profession id; Type: DEFAULT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.profession ALTER COLUMN id SET DEFAULT nextval('public.profession_id_seq'::regclass);
+
+
+--
+-- TOC entry 4368 (class 2604 OID 16725)
+-- Name: religion id; Type: DEFAULT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.religion ALTER COLUMN id SET DEFAULT nextval('public.religion_id_seq'::regclass);
+
+
+--
+-- TOC entry 4392 (class 2604 OID 16982)
+-- Name: report_users id; Type: DEFAULT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.report_users ALTER COLUMN id SET DEFAULT nextval('public.report_users_id_seq'::regclass);
+
+
+--
+-- TOC entry 4375 (class 2604 OID 16788)
+-- Name: smoking id; Type: DEFAULT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.smoking ALTER COLUMN id SET DEFAULT nextval('public.smoking_id_seq'::regclass);
+
+
+--
+-- TOC entry 4390 (class 2604 OID 16964)
+-- Name: transactions id; Type: DEFAULT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.transactions ALTER COLUMN id SET DEFAULT nextval('public.transactions_id_seq'::regclass);
+
+
+--
+-- TOC entry 4379 (class 2604 OID 16829)
+-- Name: user id; Type: DEFAULT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public."user" ALTER COLUMN id SET DEFAULT nextval('public.user_id_seq'::regclass);
+
+
+--
+-- TOC entry 4383 (class 2604 OID 16906)
+-- Name: user_interests id; Type: DEFAULT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.user_interests ALTER COLUMN id SET DEFAULT nextval('public.user_interests_id_seq'::regclass);
+
+
+--
+-- TOC entry 4387 (class 2604 OID 16937)
+-- Name: user_requests id; Type: DEFAULT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.user_requests ALTER COLUMN id SET DEFAULT nextval('public.user_requests_id_seq'::regclass);
+
+
+--
+-- TOC entry 4395 (class 2604 OID 17120)
+-- Name: users id; Type: DEFAULT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.users ALTER COLUMN id SET DEFAULT nextval('public.users_id_seq'::regclass);
+
+
+--
+-- TOC entry 4650 (class 0 OID 16812)
+-- Dependencies: 243
+-- Data for Name: caste; Type: TABLE DATA; Schema: public; Owner: doadmin
+--
+
+INSERT INTO public.caste (id, si_enc, ta_enc, en_enc, ethnicity_id) VALUES (1, '\xc30d040703024d71a830da7185107ad23d018785ade3d3e0996f719f856075459c894256f3e969fbb575ae91ae94f2b3e8952c271917dfc6e5e2127a3d66b4225736a77b577b6c7f04ef17ee9bc3', '\xc30d04070302eb7d78971b26f50c63d23d019b3541448d468669d988efeb8f5840453b6040e76c11edb14f8fa6da694ea37f7d26d93adce85f51d77d57e0be8977528dff3d7b989c5ca88028612b', '\xc30d04070302a2de30b56c4d4f8271d235012707a648580fab2239aa8403bbf0f7a591df37589c9a0e6d2c8b1bc3d5df4f554f5e23e98b78bb767236aaf1c13224dd1d0bbf60', 1);
+INSERT INTO public.caste (id, si_enc, ta_enc, en_enc, ethnicity_id) VALUES (2, '\xc30d0407030226f608e1c777082d76d23d016337d21168e06631b09c050dd6de028dc2ede2be3592fc6fa5b641777fa6501cd35966468b08242c3a6bd99d270c59cac849765434b07193829a898f', '\xc30d040703020be542e845d7aaf761d23d014d6938399d2bca27e48f62912dada078b65bca135d99d9d88b9b2db1217fa2995d04350aeb3a96af28fe4710a8fe6ff4f8d29debcc11606305984b85', '\xc30d04070302807637ff868480dc64d235019223ed1d2a744faaa54e27f66f4644024e4d6343dbd20d13dd7f91588b0effc14dd95a1f93628c479b87be7b87c667cb49b15415', 2);
+INSERT INTO public.caste (id, si_enc, ta_enc, en_enc, ethnicity_id) VALUES (3, '\xc30d04070302574557e34ae5ca7c76d23d01cfbeef2cb5e6a074f867c194a8d74622d6fb58cc58696fb14ff12f4855f87e73ed54f19321c38fe0e15e0a5a7bbb563bdb45025d39471e6e0b9a2526', '\xc30d04070302c4955e358694b5de68d23d01e619b202363306fbef3f43c237f7d00a57036524a089744697ef36484af5aa798b4c608fa4e5e00d12ced5d2f533263c5cad79da84c29f423e988766', '\xc30d04070302f7ea6454bfa4814376d235018a8499b609aadc07d270a185836f9261824a7d99b2d6c88c2755ae664d6ee702d11011073eae3b51d98dd9eb75ade4082d57d3ce', 3);
+INSERT INTO public.caste (id, si_enc, ta_enc, en_enc, ethnicity_id) VALUES (4, '\xc30d04070302bf88fd1481c3d47764d23d01f591911041a4c5af83ac19a95f93fc1bd9a06d632e2a6fba263cb3f4e4af520c1fc1497820707e89d7ff5252fb391980ce400c1ca6caffd5882135c1', '\xc30d0407030221af3a8b594db49766d23d01d32611867f4ff183a53be32beee2b50f11529c84b3ed7f8e22291c17c05dfb3b130de939e35912a10f22d0aaae10daa2a78b69796cb0c291ae2e08a4', '\xc30d04070302d4f0a2947aa468087ed23501deb0b9487825ecde8698db351bb4ef239dc6b9954c10c00631600bb4fccb38a558f7edbb4210c15afdaf8c940f2c3cd3d5efbc00', 4);
+INSERT INTO public.caste (id, si_enc, ta_enc, en_enc, ethnicity_id) VALUES (5, '\xc30d0407030277064e221bbcd9687bd23d014bceb921112df9b891ac04a181e6e11473f8ff21acddb25739a19af50eaa4cf2e03b9e8b51938ea65b88de9569bf711dace6302ee90ea153a39e2195', '\xc30d0407030284ab94de0300699371d23d01bf783ec4f9a973c4eac012c380610766d7241bd319d4de4ba04b27141071ff9ef1e8748a412ac611e95dc982c2089d8bb809478a0e2ce4137d24f5a8', '\xc30d04070302cdc2105b268c84b465d235012c9f960929e5a931128fb2881a31a9f82b40352cf4362bef34517ce88b2667273dec10c0d23b95bd6f7ca95f74a556f002fe7c61', 5);
+
+
+--
+-- TOC entry 4626 (class 0 OID 16699)
+-- Dependencies: 219
+-- Data for Name: city; Type: TABLE DATA; Schema: public; Owner: doadmin
+--
+
+INSERT INTO public.city (id, si_enc, ta_enc, en_enc, country_id) VALUES (1, '\xc30d04070302599dc98c92424fa17bd23d01d88f75597012387741829ade8c340caff8dee697e3af10618964e073471b9eace90d6bf66ddcdfc42b961f0df3de5a48c852b1014f83b8c2477cf0d0', '\xc30d0407030200e1dd8c3271b2b56bd2520197c47a5e7dca7c1119fb26d2b2f29d5062da1edc6abfbe0c09c1f1b32728bdc8fdd0445ef00c91eb895edb7c764b44a1321a52c57cb020ceff723ea117e5e807cc82994ed9d83125dd26744e5d6265b3e1', '\xc30d040703022d7a493f0d8a798b6ad23d014365ec9d35062d24dae8ffc4815b5514c274f43730f5d7688673772fbbe5d9aef21618a4b53ded528d48e6735208e7859fb514f49ae0bf30c5ad8714', 2);
+INSERT INTO public.city (id, si_enc, ta_enc, en_enc, country_id) VALUES (2, '\xc30d04070302e8ef7c420fb98b037fd23d01e0e2a9f8c07ba712adcaaa30d28db612f889c63c977228f16d4463e3bafb2a0569b1223727a955d6f6e50e4e5278635128a9cd57f6a8fa8936d8259f', '\xc30d040703023326b91af49f334963d2520134353eeffec5b4ed8911ec64ac1d62e1627d5e8e2711793b09a0e998f81493558d75f15e1af022b4ded63750317429912212ee72fb43097c4dbb3b74a798753a08045b2069848798fd4caebd22199449d7', '\xc30d04070302d64edc9857ae25fd72d23d016163b933191ead91e4399b02b882796e574dd1cf5d571cde90c9edf917fcd7c543a3265fd1cd6af16c8520fe1dc37991297abeb9213df1411d6d27fa', 3);
+INSERT INTO public.city (id, si_enc, ta_enc, en_enc, country_id) VALUES (3, '\xc30d04070302f8f0d5107e553a676ed23d011ac76653f68d30b247c8573ced34773e4b81a3d3683778ebeffd668d2c668ea675265cb58fc9977a339ae20fcf0badcb0cbd1dab45a39bf86bf0b655', '\xc30d04070302fb37b612388a7dfe70d25201caa228f01f78a3ea1a34ba18063c299aa453825ee1cbe58548f21ede7ae43b0a62de1e1d1323190d7e2b11391f76f5226f67d3acc13d027596b57af5c42b168ac7abb3db97b763a743eb4424d1b77333fe', '\xc30d04070302ba513278045b662671d23d010d8b31e2b62c7b45e220dd6fafd18059fbe1b6f06b2d6f007faa16fc15c15aa38e54d5d5b48d91ac663b8c707d37c1e8b1d0dffcea99ac1624d7c0b5', 4);
+INSERT INTO public.city (id, si_enc, ta_enc, en_enc, country_id) VALUES (4, '\xc30d04070302e9268b32128343486bd23d01dce3d94a93d4bd7e8b78151f4674b8db5d529f6f62647ba0548f929e163f331774a072f35d0dc34f9f1bb937d9a47c691107172fb0faac4bd51f6bf5', '\xc30d040703025c64584e5cb9fa657bd25201451b570c47e93c2ef739871ce30653fe7845d74d71167783022311d2e9718100814dc8d89d8b0aeaa124e24fedee86cfe80373bf2d590ebc01a3181bd2e141b972eb0a6bd31e0e65e27394e063c6920055', '\xc30d0407030292d838b8cf2ab8506cd23d01aed1fadcfc722bcf7f67891dcfa248ba546d2b9262cb06458133c5e47fbfe33d458ec3de6b5c0fbb85d5fb6b156fa25acac8eb7f8e16274d37e52eeb', 5);
+INSERT INTO public.city (id, si_enc, ta_enc, en_enc, country_id) VALUES (5, '\xc30d04070302e2e933f887e306547dd23d01d455463effcbac1a4e146eded7dc8252fdd69a23495116affe75846659f49da2b0d457bac483f37053cfc0151b4cd4fcaa90cd5887ff9c36f58f56af', '\xc30d04070302b5fc53708f237d7360d252016e1afadecc5c3803719ae7bf6179849d53988c33ac6fecccb90082ea6ace206a444b2a99f79c7b87c43cc0993db3428876201fd9d82bb0d40f85bb9ee1ec418d8f49d63810b2b9a6f952f88762f99bc915', '\xc30d04070302ad0e1477f784d41e61d23d01343819d791808d931dbc5dcf29c1833f375013be7785b4e6cd740110004662dee128022494ed19a6b4435e70e38a0c339512233317638687dbad992f', 6);
+
+
+--
+-- TOC entry 4634 (class 0 OID 16740)
+-- Dependencies: 227
+-- Data for Name: civil_status; Type: TABLE DATA; Schema: public; Owner: doadmin
+--
+
+INSERT INTO public.civil_status (id, si_enc, ta_enc, en_enc) VALUES (1, '\xc30d04070302e9045087b495935a6ed24d011e0e7229767b447a2632ee1ca170294b1a7283d0e7a08aa65f037623b332b8a4294202adde39293bed76eef4aaeae9f7f2be2cf3dbb05d538837bbdbe6bb132f82e9e15f2671083761e73089', '\xc30d04070302adca4e2448536e4a75d25f01084b7fc11036a525719684a1bb0690093186178d2672c954651c54408a7807af01c0033f5779ff53700d52faf80ffee417b64b905855d308e6b0892f9cc115fade0f87d539ed0d9daef939ae76b751bca45afc1b5d9e23bb29578996948d', '\xc30d04070302d17a6059a974ec137dd237013cdd324b2a3754d4e343e0533cf35968b146cc5cbe250d3755ebbb74748cc0eabeea9d2fd5a68461eff5266990bae16492ae197f96f9');
+INSERT INTO public.civil_status (id, si_enc, ta_enc, en_enc) VALUES (2, '\xc30d04070302ad0cfd7f376d115278d24d011ef6ba44b81694ca96576d426744df281cbafba196cbe28edb1145d2282496067912325e04a6db4a0548d80a12421cbb808b58da2b582323426d8af813f3e98e23846321105b065f4449d290', '\xc30d04070302828e49af861f2ef568d25f0180ca1ec3d3ef93ff0545e1cec9ba4324dd5374aad8b30624703d285837a3e2bd63de1c9efe991a2d244aa23d1cd5c43db6ae5e5d5b33973c962dbbd342ace9c121d9759be021c3d1cd07df00884afb1435a2e1df8489618b9aa04950c06f', '\xc30d04070302eb0fbce4b8f8ebe86cd23701a08992386620e25918c9837988de7f71a6474f30900186bc40eb14b0f28166d13092f238b0cc8ea7ddb611105b5f6662a58bb96d0995');
+INSERT INTO public.civil_status (id, si_enc, ta_enc, en_enc) VALUES (3, '\xc30d0407030263af12f1b868ad227ad24d011cfd464a771fbff352dea966c41841c96c86831b82def0e9589745d7d6829163c786983a0f9bd0d90c58c475c197169508526c5ea7f65cedb3c26653a1f0aa53acb0543c2fc7bb22a5759a1b', '\xc30d0407030219d48e9fa60c15f170d25f010d66e19ca675c515a3b755e671da553cb12978532d6336056005fb9c7d314de86ed0808a9f714f65d16e2c2b60f2ee132f3bbf9b351e6604d082068658b2254a7858927661bdea058531dd03ada7f72b054970c8c93de2acb9906a16a803', '\xc30d040703021168c6b811ed06ff66d23701445b6ccd8e53b2ed5b7b8e7d11e3034adbb71218088dfdb092f68faa448d8e1fc1abb116b73c016a3d4ea335a6ed3d34e4eaf8a2e6b6');
+INSERT INTO public.civil_status (id, si_enc, ta_enc, en_enc) VALUES (4, '\xc30d040703027175bbe30502ed2974d24d017a9f0d2a60795f470ed4aba4d003fe3c8bccb9b85111cd22cf713731527607a7d46225db9bacae62295cf4f760aa03118f609975f93fe83fe095bc82691fa310abaea140b2bc479d636b2b43', '\xc30d04070302f747497dd25873a263d25f010b8edc303ba85656181e21d9ba15fcd320b80a418b0a332fdc22e782ebac1da15d63e9847391250f5ff28b685dfe8cb4db44cef792686330fabad89237168507805cc041630a3d9cff2b696ce82695bb57ccf1e724e3c0451f6644b0ffc3', '\xc30d0407030296830f65768b2ec47cd23701ea964c3d78389deeab201cfd19097d68bb3535c5bf6af010180b0d6862a02371976c05b6c68be1cb48043603e4d275b213f454e7abfc');
+INSERT INTO public.civil_status (id, si_enc, ta_enc, en_enc) VALUES (5, '\xc30d04070302f3e68c794b47995069d24d01a832dd6f927c7dab1f5660328135511d2a5265a43c119aba09c3ee58c916db7a2cf189b024b410592ff2e56181b3a848f13c6a53f5a2e16dc028807b42580e08139e92c24657001fa36ac0fb', '\xc30d040703024565af547e4a1ac266d25f01b6ffcdaa93eb3f79eff86c75b66e9a0f44252e5a3f686e0ac35d6e6d16bd1dfdba06eefab157e3d054ed7c42cf45a9c237cce403424836e4dc7a762cd642af61ac5f4685b0199acd1d26a6bea6a507c89334d5eeb902252d241a328676fc', '\xc30d04070302ffad03aca0de1e7879d23701e94a9a4131d0781ded30df86861c7e90c9db5f154d75c33d7f453bc23f532e4417c54f92d77fc1a539496f714550ebd53f6e1e55fbe9');
+
+
+--
+-- TOC entry 4624 (class 0 OID 16690)
+-- Dependencies: 217
+-- Data for Name: country; Type: TABLE DATA; Schema: public; Owner: doadmin
+--
+
+INSERT INTO public.country (id, si_enc, ta_enc, en_enc, phone_code_enc) VALUES (1, '\xc30d040903028df8302ec870ab2568d2500110c2fe04062e1fe7a3414881e50f5ef434116eb0958af8e956715f2e71d1aa8770e49f2105608901c8f3dd9b0c05dcc2225c6929c38e8cb32e7e700eb69ad02d78230dd48754e484af24336cbb7dce', '\xc30d04090302e67405711621cb7468d243010085299f7c3d3b18e191918cc6681cde0314aec9f6438b0fb710e33e03e24f91305f1949586013304c3558ba69ab8eae8af25dcc347566fe4840237c74731ff357f0', '\xc30d040903025c08c7bac4a36ad465d23a01de1718ad1d19e8e766a021f24aef0ae4cd3d42a808fcb5bf48212e4365582e0fb83dc53455b917d47caef96b2c589a6d6af032d0ab02b0f2b3', '\xc30d04090302797a79e3d32f20117bd234018c324ab599223d4c76aa9937fe60fc4899a1bcf4131d14210a4fbb3c0be3b3985805f380536fb58b89d04fc31170c8f3dd2887');
+INSERT INTO public.country (id, si_enc, ta_enc, en_enc, phone_code_enc) VALUES (2, '\xc30d040703025eea8cc85b8808cb7ed25001e0e9b1d9d7b10c19a19f804c2ed4cc16bb6fe13617e4528da5e513d82e7279b7d05a7c0571bd780f38758dff6778fa481de7a0b935f7f454b360b9e8ffb8c14e31959f5a493d46b85226052be22b8a', '\xc30d040703023430a4bfd1de46c167d243016193d2acd17313d8a071d5bfc4189c9509dd9ffcbe0521da746e6afca83fa97d24fe4c04044e0970290d51aa3c920b032804f1f9a0acc2513a681cdb3339915d8320', '\xc30d04070302b024f72643fce8ba75d23a01da160bdddf08573ec8ce9d3d6bfa3ac8d5f37829aa9c685a37df557438d5570bd4e131f42af3520016bd82e2ae598de0b95bf64bd0ca22597f', '\xc30d04070302295e705e97d772a061d23401134b4d73ac5161ff443bbe0e9267db34cb3cb29e5392bec1f6ad6a556b0aa60931693c0e86813b0075787d489ffc825f93b724');
+INSERT INTO public.country (id, si_enc, ta_enc, en_enc, phone_code_enc) VALUES (3, '\xc30d0407030247294b2aec2fd08a6bd25001384709651abb7dfc1ea98d50850291a41bca187749a7f540ba72f1ef3c19dd63fdd89fcddb731f76e387a13eec07c47efc8036b6b748393283defacd5cff1d65812505de73d08166dc202450879d04', '\xc30d040703028edfc215611de6347ad24301b3e14466ec7c3943f92a0dec14dd6b5dbc8cf93380980de338b808cab3c65f791c3d7df7243245d546497c9c16083609c36d882eee23a5be234e2b88690a89af9e2b', '\xc30d0407030255f19b730a43e1b572d23a014e658f7edf457d2abb829a39d6aab0b7d35ab3a64329066106e0e001437a3ea145282464afa8e15b5c22971bb2994b07b2ff69fbd1a065e60a', '\xc30d04070302e0eb9845e4959d776bd23401e27f1e620ab4d77cc160ccf396c74f01a6590e6b1ad9dce2653873c50640a698cf64a360f0844a4ccc84a41da67b57f61e9334');
+INSERT INTO public.country (id, si_enc, ta_enc, en_enc, phone_code_enc) VALUES (4, '\xc30d0407030241c77ee0933693ce7dd25001b7ea8bf9c32c5a9ff97c487f02decedfc2ef128e1a4c574332d4795d2fb3a047889c4a301d06ec4f19720c9dc0a45ee9558ac474db4dc8a840332b32cdc0fb07caaf03fcf1f7ff92b0824d5e9ed4cd', '\xc30d04070302664b99f51bfe1bf97cd2430175cec334aabcdf0f719948fcb8285332d62ebf3a75c9ec16164ac351838ad7c318fb915a619ca277aac1308775867c741ce86c1d7fcf3df56b12690e1b651c50b550', '\xc30d0407030263a12a520b3823687dd23a01bbd345590c50be4046a20b1ed5a481fe59ae98c0e7460ea08714bd70331ba4709e6bdf054cdce980384c91b458d6596ad063f86953437cc14b', '\xc30d040703020bfbf1bff936ca9b63d234013da74ed73b7437a9ee57e14ec1e2b638d13356d84cfd61b825a6e0380f826beb94d04e1689f6b35cbc8364355f07a35b16268b');
+INSERT INTO public.country (id, si_enc, ta_enc, en_enc, phone_code_enc) VALUES (5, '\xc30d0407030275b56c748056f9d978d2500133ae358f3ff2a71901d61e5bf8158185902b7c0bf99d024c0ae1255185568b8a9394c9bf437c68e380e3f6850cf5bb0927e1f6b6aa0f96d4db3f226d4531f66c1d8fc3ccffefd5a199784383c2250a', '\xc30d04070302a203925db631715465d2430114297590b423c208de88c803a0042026110d73f4d51684b5c3bca9b6c502681f4dcb99319301dbdb5386234648a3cc8d4a0eb5a40a977791302074ac58fb01e0237f', '\xc30d04070302fa791bf6505fa04578d23a01a6041282e6340383cd21b20e4c830812c207ba4e71d929418580b11562087ac9f4876e647fd185ed08e3b753663aa8bf5bc92f76b5fe5c44cb', '\xc30d04070302f8ef7fd912d237027ad2340106e4469572b7dd5ff8c85c863cd16e2da09cdae559534368f526286da525c40f2d52141ce961ff4ba0e365705815147f75e652');
+INSERT INTO public.country (id, si_enc, ta_enc, en_enc, phone_code_enc) VALUES (6, '\xc30d04070302d6c8d1553791b34071d25001e6375d8414a83a8c7de2f002f4f73ffd9ad5e1d11c289577567f36269dea1e5a500ec5f89aaba72d7254154c63c7dcdaaa00ed4ac92bb235cd2f58f227568d92cbd8d5d9a961cb16801d4d7f59cc1e', '\xc30d040703022cbbbd9dfd6ccebb73d243018fd1a8b97141597cb7c42f6fe7570c22c8242fc7e372c3fe15f45a6ea55caf9a9ff4619cd19cbd2476848d5b5592edd4c1488dc1e147ee5359ec98fb4208c1949268', '\xc30d0407030220f2ad34ad5c7b9478d23a0130b8837f62d31f75f0e4b0753041b732554ea693dea412d9c515d2c76f942d5dc811630eb65c0826ce30b16ad1fb51435dd269dcfe882018d6', '\xc30d04070302824b37403c929f487bd234017c95cba1721eb57a9fef2dcac723d496e3fb7b8bddecefc31f7528f5bcfd51256a2b9257a5218ebcdcc0ff0bd99025e8ebf396');
+
+
+--
+-- TOC entry 4642 (class 0 OID 16776)
+-- Dependencies: 235
+-- Data for Name: drinking; Type: TABLE DATA; Schema: public; Owner: doadmin
+--
+
+INSERT INTO public.drinking (id, si_enc, ta_enc, en_enc) VALUES (1, '\xc30d04070302ad9864a47938a8a577d255011c97a6a7f6fdc461cb60ad0ca6376cf2ce2035bf02b7524c06cb9adaae847695cdf4cf7f87e86104bdc1adc4799ea192b291aacae1d44fbf0070fb6b14d067a8c117330e58e0033b4dd7d5876a644e2ab184b85e', '\xc30d04070302dd74767996871a5175d259017025031138334ac779c2549357aa6defc9a01ecfed7c573300610203fa9cd8bce7607ffdc91c2befdbd2eb1b891209f7dbeaa56d1a87abdcd95ad3f1436eaff2d67d46776883ba371bf4e3c436e77ab7ec44522250b27d71', '\xc30d0407030242f766ff82dc3e3378d23d014f40613ddcd315f06b9779a737529d8ec2d104f65cb4d8d73e2ff9b3f4bc1a03baab43b87fda8aa6a502c795a5cccd6e3d687accbeb1dcb82cf39aee');
+INSERT INTO public.drinking (id, si_enc, ta_enc, en_enc) VALUES (2, '\xc30d040703021e16238d9068e1336fd25501591b31638f42da21164edaed51703e096a529c81d938f55df1ad2c0e26c3b5362258071b3f416fd6f558c496ac37b57641b2c542b24459ccc89fdf55bc59aea08e120ce788ccf637528644382fb0c8584992a050', '\xc30d04070302197ce3ae2c3ae8307ad25901a23407b7187f79790bb477f1d269c7e36b7910758b9d615e2a92eab9ae218072b25df4219583884257376be32f6818d20372711eb64d7f9fcc07cc14de49a89a6f5a4d76f72e233e4cfec12cbf743af3044df3ba00f8ca54', '\xc30d040703021fbfb3e0fbd588dd7fd23d01531eefde2e4c3f22e7bed46764a797c7c9823387f0efb07bf0483fd64bb2f0c3b9e57cf622e97f737a31fbe0fbe06ac8e20bbe9258b22bd032af1586');
+INSERT INTO public.drinking (id, si_enc, ta_enc, en_enc) VALUES (3, '\xc30d04070302e64509702bbcd14876d25501818cd06745ac74f85896d953a592ba46d993bfee9b4552901b63b1bbadcbfdbb0cec6555fdb55eccacef655379e8e8a4b4ed53f9cb38579f6cc8cb89a2b3887100ae86a7e4b80e59641f3a75b15df2c31972e83b', '\xc30d040703026d56688a5dd939186fd25901327d5022d55e0b1911af10b7daee5bcef2e1e560f92d41a8b3dec3d8f2dff1acd4e9e162ff40e62bece1519887731eee84009da413152168d8da456ba1bb8ace204754d6bd01830e936d0137dd5e557f0136b6f8a2abcc6d', '\xc30d04070302d0edf5c36d38329f77d23d014c81d3fdede15b0cdd65e8f75bae0b3994c83d587d05c619f71361c3182b84137b25b8c676c465d7fe57701083f8b5f52b245beb87e3d29e492e3c58');
+INSERT INTO public.drinking (id, si_enc, ta_enc, en_enc) VALUES (4, '\xc30d0407030274b2f0c1e0aad1d062d25501d59a7f70078945ac7868b52b42ee756523d7824d5ed034c21a9314c389cfd6b6e0c21169e18cd21347e61e4c4596a33a896e896d8404e9b9bf6f3e73c29e5e0b05350a558c9076b7b4df2fba70bb4a3dbccd9786', '\xc30d04070302d996512dbf77022d75d25901b2d645820c4a9259ffd071a029b3b8206ff367470582444bcaae3ac15721cb0527a3930bd2bec8139404b7918430a426a1113540083fc4ea537e849a8ee07f80f1bdf1c6ce7670fd5b0998ff753bf1f07cdb4520f0a055b1', '\xc30d04070302981be34c47d6593173d23d0132cfadc2491b988c5d8895531a38018cb3b34386e7912096f5bb2df4a5b7d95e845a2cafdbf3f92f56785a15b0df565c70c43635709c93c69be4f5fd');
+INSERT INTO public.drinking (id, si_enc, ta_enc, en_enc) VALUES (5, '\xc30d040703026040bac3d30b915d6ed25501466372a398e9a9601e1fc8345a5d632e0e7d99bfcac61ce2e28ae257f332da2a49f858b049565ed78a45e9c89dcab0162ea93632066c277c144bf5540efc10f5460cb1815c60f720262887cd5b836372ef2ef56e', '\xc30d04070302cb2b132086ad62c175d259016c6f4d4a07cf00cca9e352eab8040230d231ead6ac24dc8e1051ce32d02d92b4132aa13cf9393746b472b3f89bda8705679d502ba31b9c1c5b211cf875dea196b74f29bfd4782f7712c40be81025a5a2faec797c33001f67', '\xc30d04070302dc0c1c9c470f81f075d23d013caee7c77f3fd46aae834a930a46c4dedf6b77b7edec4648fe25616970d103b2d38629041179f9d5972c5fc39c081f8ed6ec0b43276a04f7990b9235');
+
+
+--
+-- TOC entry 4632 (class 0 OID 16731)
+-- Dependencies: 225
+-- Data for Name: edu_level; Type: TABLE DATA; Schema: public; Owner: doadmin
+--
+
+INSERT INTO public.edu_level (id, si_enc, ta_enc, en_enc) VALUES (1, '\xc30d040703028f983ef70dc0094a76d24701ad9144409efabbd7530f7ea288fa388bcdd82aaf6afc9ecc7eddfb38c51b0f06b59abcee684832a4382c31dacb855ac614b8ff9c338d95ff5f8ed5e691e7b9096bf4b43cbf7f', '\xc30d0407030292bc605f52e8820b7bd25601fc6c9045900d5fe83cd2633752aedcc5982b4507ea0568989321e3feafebfb9b4cd7cbedea73a0ec39c5fb4c55d69a5a40d6185586fb821fc5e5ceec47e1ef4035157c745258f4ff2b87443301b7b471b9573f85b5', '\xc30d0407030223b1edcee9553cd26bd23f01205bbce9a776a61c28db793f5307d6a511e24dae33537008c5084b9663ab9cbf523d526eddffa305ce4cc6f13a42119ebb92139a62ab806f395728962e20');
+INSERT INTO public.edu_level (id, si_enc, ta_enc, en_enc) VALUES (2, '\xc30d04070302293e79358484de1c67d2470122583955aa80d9b0c606178c7f3e52d0d425a4d5a76398f371ffd23bc22877481def7520865524c5317be28127bc22c0c5683deec1f42560629c6ded5ae5578c025a54270835', '\xc30d04070302fc5f8d2df2f658217fd25601ddf7678042030966bb681cbb5d82aa60ff34a36630e1c7d1b9e8b54007015e0bcde2b302023ebbce3e18e8aca77cbca4ab12a1cbd91a0bbf0c0a730539627035a7a499d371e924855d21329b7c7b016dd507f3ec07', '\xc30d0407030244dc7acb338953c27fd23f011c2724e1bb1d980740cbf18f9757da0f94e0ecd459b8e00195cdfe557e4dd95dc756d49f06e604b6d384a1fb05aedf07b1de1b76b72f88fea4a75550844b');
+INSERT INTO public.edu_level (id, si_enc, ta_enc, en_enc) VALUES (3, '\xc30d04070302d5fc2028da34568b75d247019011b5b07ef9e3dcb5dcf9442a18ebbba83796817c892b70eadba4e8a6f9c0b342807b830c6a25b32ef075b80e727f3d3337dfe12f7ba7d0b7933dc32969fa4445bca2c169c5', '\xc30d0407030201abd5eb736cbbc96ad2560176fca9500bc13a17ba2d4004b7972222d5e6a81577fb657a2d700a292616579e0190c6eb514cd1312829b5a637eec8b34d79e32772c61b8ea0922940f247ee0aa2a73dde66ce4ec56c8fbec4dc0d4e8a4183c6c623', '\xc30d040703027ff7a1efda94ef546bd23f0129d541b974d720c1e51496581c56ba1669c51ca09a53255caaee9e616d4c5cb0f26bc78a2ae2a85e68ac80c8e88323663967a22219d8664b481b736e960b');
+INSERT INTO public.edu_level (id, si_enc, ta_enc, en_enc) VALUES (4, '\xc30d040703022e09963334073f6467d24701f367e088c30f3b5c25c5847d6ae586663cd18687700ab71826e4e1ad3e0d2719a087653f87b1e6e12debeec1e58364f0fdb8313b799b42591182014560ad1839188513f1d74b', '\xc30d040703026494a80315202dd461d25601ddf3337a71158c32b1b358e27bdce11295056dbaf6c35abf49b4529fb9523ed9d05551550de6e9ec11494d82b477d533a4d659118ff7fb58ae0d64e6f3276e9acfe16fd1ccd21b9eb8bf89a17efe44c52c001deafa', '\xc30d040703023a0c0eb57891f09b6cd23f01fad7001f87a513eaf4f222194334965e41750c93e7c8317910069b24645824cf3bef3bf2b6ea3be4351937748469b041839693f136a3dad66049213779ba');
+INSERT INTO public.edu_level (id, si_enc, ta_enc, en_enc) VALUES (5, '\xc30d04070302d9848dfe5b2badd172d2470156660cf0ecd4e78bdb439eb72a2e497ffaef73954066a0a0fb4a0ff7f109434b96dd1f39513ccb4b0a36f832bc344f5e1f2a32300db638f4072335a131df80062703a1be79d2', '\xc30d0407030257a5f54e1c63c82476d25601591db0bb83f20ba2e48dd7a84c75cb4a5e70a91162a904737bea9676d421429c5ed284cb693b7f242cc033bf4e45601987c5eb0055309906c6659ec2c543e8a1e65dbdb94492d4ea79fcfc7505e9e3380360c0e5d4', '\xc30d0407030243db26fb5e167ac76dd23f01bbb44bd7d031546535b8f9ca9b0acf9ec0390c86970dbc2cf2dc09c3a8f49aba14dc8634638b237759e5e6ade479f0bee07a945f02887d4919159819f200');
+
+
+--
+-- TOC entry 4628 (class 0 OID 16713)
+-- Dependencies: 221
+-- Data for Name: ethnicity; Type: TABLE DATA; Schema: public; Owner: doadmin
+--
+
+INSERT INTO public.ethnicity (id, si_enc, ta_enc, en_enc) VALUES (1, '\xc30d04070302e08592e7ff8ea2ed7bd240016acabbf693593c96c3a95fd06d0f34c12a01860fc8673f53eff951bb69e0ff50f75cd84fea352f11a7df51d5a2926255f12b8d558da44ebe7302c2103047f4', '\xc30d040703024d5d76749956afa776d24301dbaa61465e840ab5f6b650d8fca27eaeebe4c01659339532bac8074b167a0da0a29f76f1ec584696dc95b3679c9e850293d4a39ec8be3fe6a4eb721c7a499f6802cc', '\xc30d040703027631dc8829db25ec74d238019f66dcf0fa41079c6aa416daecdfaf742cf90bb0982b3d1ec5d74a1e134b23071ea06ea5cbcbb3f8c5fbd45c4aeef5cbb09e1680c87ae2');
+INSERT INTO public.ethnicity (id, si_enc, ta_enc, en_enc) VALUES (2, '\xc30d0407030233ef97e70a3a41d476d240019c9f81ccd23387de76213c864c6259437c76ff2da58212c23e563c5674125ee5c63e21c6a324a116346cbe8964ebb725cedd76c37e472c0a884d4f89ccb0f5', '\xc30d040703020fae470f8ff419726bd2430168f69e1bd1415cff4cc7cb141cb5bd260d8e7cb439851c57ee77ad2b0a5734a0c6db645540d75f3ce90ed3fabe823d3c26cb26089018f526c6cac9ef999346a3e10d', '\xc30d04070302d111891ff056b90371d238014b5569bf8e45b4156b0c98fde069ff38493a0540655e7aa8f2a2b2352f4ce3d39aee5de672b87f6109d32aa0475ec96d97539212e380aa');
+INSERT INTO public.ethnicity (id, si_enc, ta_enc, en_enc) VALUES (3, '\xc30d040703024c7aeaed03c6dfc67bd24001aba03f1cb6322203489abc5af59c8aa2e067f5f1410f337844875d2b1bf0cc7c36801ebfe48478bb36ba3d9e40f9de954d3679d98cf32aab5fc79ccfec969e', '\xc30d040703027b814cbd784093e47ad24301c9b2c5f3092369a95e992dc3408c0f2841a019a3b2b7de0b7aaba01bb520f52236d8b474ac942cf55730b5b4963ec037f108979871033064c6457da93d4f32ceac6a', '\xc30d04070302403af4869a1cf4cf61d238019e60d4547184e57cfbabb553add7dfd5eda2b754a0431958f0756469fd933f0aafa05867200eb17f802782b5f5dd8feb706e578f7cff72');
+INSERT INTO public.ethnicity (id, si_enc, ta_enc, en_enc) VALUES (4, '\xc30d04070302f1f576a2fcb433056fd240016905d8ce088b078e75605163240bd630ea553a7d089fb0d80efd4d5270182e4007e5e1601e41cff79b1cc245cb6f33cf8e0ebefba507ee4ce428469d963e20', '\xc30d04070302dd3682ea39b100cc67d243013edc43a5e648520c739880cada9a1e0ccf76999e4e480217bd1297363f5b34d3c2b6836fa996304317957e344887809f45a59a0623f6c6615348624e292f21b11c57', '\xc30d040703020e067d855270fc1b77d238019703be999f88079cde7f9b1ebeab8d8539919336aee1b8c93ef0f03de282546b7bcaf8f2f302e0c9a8c02f260c3bd975406900603cb4fb');
+INSERT INTO public.ethnicity (id, si_enc, ta_enc, en_enc) VALUES (5, '\xc30d040703020f8cf7ba3dd3c36a6fd240015266fa6e0f2cc2d9f2323cbf5387402cc9a24b9d57cb782176b769a3798f179bc03389196d06d03192c3249429c39cd54137e925aa921a715becaa02c5f8c8', '\xc30d04070302e34893023e2d70757fd24301286431eec59a3f56d80d0ea0612b05b390cbef5a154043ce154e39585e59c0e2d496cab49858b0df2c8069dee7f33586238e599252321b9eb6d852ab3c5bea15b604', '\xc30d0407030203f21843f4cbc55466d238011af9994cf663562d6c7ab30e1b2e05faa084b8c08f963c77a960c8487fb67544ec4aaf0cdcba1c4eac417362623a920ecd7002b01c37dd');
+
+
+--
+-- TOC entry 4640 (class 0 OID 16767)
+-- Dependencies: 233
+-- Data for Name: food_preference; Type: TABLE DATA; Schema: public; Owner: doadmin
+--
+
+INSERT INTO public.food_preference (id, si_enc, ta_enc, en_enc) VALUES (1, '\xc30d04070302201f06290e4727ae68d24d011a6f36da955106a738ae178c42c5f766d0acf868e212bca37204e7beeee97f3cb0908cd6e7b7fae3023a7bb6edbbd034b9f046610c73fdcd2e62182b8861613610dd4788d6a03418fa8a5bd3', '\xc30d04070302d68af7037bfaa6e166d24601cfc00ba3fab41b1a7879f94690c899f60969f2b960e2f90f367b04e84edb8c07905156caac520ad1b6309a55d9552a63f7aa2c02b6c4748b9d05730cb80be18cbbfda9b0c0', '\xc30d040703028e79488d40105b8168d23f01319ae464be50ab6d535f9df0c3bb2f202ced3581f6adfd57b6cb51cb08c104baf990155f63ae44dd80d5e366764b4e7880d8213764dae77303f866e7a452');
+INSERT INTO public.food_preference (id, si_enc, ta_enc, en_enc) VALUES (2, '\xc30d040703025931b8cbf0b833ba69d24d01850346e655b7260b197225aa2d3f3ca3d5e12cc881d4f6fb1cddeae81936ae7ac3f998d8bcc163965893f41d7f3671d0adb3bc0dbc8566650c330ff4f3cc69c2ccee324d4eb8b992e24276c5', '\xc30d04070302f222a0175799d87d65d2460148e3c21a2ca9f3a20f4101ea30ac663f6ac2ac3b307771aa24b6929352cc46ed7fc3510f243b0389deb05259b81472d59c7b625d30b201f63cb2b4faa95abbf5e982461167', '\xc30d040703022bfa90e36bc502a061d23f013e9e11c9d38075dd3051eaabc6f6db0a4d79e37d9f288aff62d26db7afaee06c344d2424bbcac14afaf08e6fc615a330ad4f90e3a7871d5183a688dec92b');
+INSERT INTO public.food_preference (id, si_enc, ta_enc, en_enc) VALUES (3, '\xc30d04070302f55c9074a0433ee66cd24d011a29bbc4561a7b4885514f17fb8524efdda89a65054d86f6302fd74f8034c19ec8ddc2dca37027411b114c1c21c6f96a27bcff9491c68f8035a89b2be0e987970d7f27f97299b2c537aa5160', '\xc30d04070302aeee460548502f506fd24601676276717ea695ce15fed90bf2a28fb80c2798fb5d726e365bfa2f74c2a71a4a39c9618431366a2307dc50030cfa7e5843b98ce6f502e8f04a26b4010248cf7905201c4e81', '\xc30d040703028b9c8ff13a832bb862d23f01d6d054a45362288709b61d9776bc21bc3aa1871658ce0eadd9f0566152aa913c9a67da7c5827710a71385a260333f72c03425e39999c0ced4e0c9a92f442');
+INSERT INTO public.food_preference (id, si_enc, ta_enc, en_enc) VALUES (4, '\xc30d040703028b884a773dcb98cb65d24d01a322d4aafc055a5a7ddf0698be012bdd6dbc293c6a4502f58b234a594c7532c3e80cbbc876e63873247c64e5c6a485a11722a21804a4506daee2a651a8a2b42c9c0b106848a83934b8a368c6', '\xc30d04070302d99a4241b8478fce67d24601073eb0950022c43a0ee89125ece06e771bb0ba8fabb511c149bd5571f72825484c239621994f6e33d5d24f9c00e6dabe3ac84f28247b0355408c1306ecb9e221279893ef8c', '\xc30d04070302843fe295394db01e72d23f01637efd6b004bde2eb5d65f197b38ce45826495f1006475dd3ef6e2da9ef2c9d014933df313b6b367f51364fc35210197bb0a7ce0228b1a7a1a0f54e6a8c5');
+INSERT INTO public.food_preference (id, si_enc, ta_enc, en_enc) VALUES (5, '\xc30d040703027890a05f77e37a0c66d24d017cab6303aa8542e696f155f4bfeddeedb5b490aa00c712fc9c54e434fd9127521979dd8fd1587318290be661bab99c21fa9a162d14dfd2574aeb5a6b9a2bd145558829868a90deaf99777c99', '\xc30d04070302b9f9304ad0d34ae563d2460154e943c99616b148b914c14010733f846290fef4f51de7e254909449ec8253f1baf92d3b884088a6a5674e8ece48a0d6d704b710bfdabf98b39ed19ac24bdb4f5964de2a28', '\xc30d040703021ccc86c5eb50adac67d23f01868900299d8146a00e71b14b8dc4a8907eb1d340e8f811d6c9a1c093ff930d762f6cef3223614f75d34890c30de30dd7d5c97435b8b830cff7e79bfdac47');
+
+
+--
+-- TOC entry 4656 (class 0 OID 16920)
+-- Dependencies: 249
+-- Data for Name: hearts; Type: TABLE DATA; Schema: public; Owner: doadmin
+--
+
+INSERT INTO public.hearts (id, user_id, free_hearts, paid_hearts) VALUES (1, 1, 5, 0);
+INSERT INTO public.hearts (id, user_id, free_hearts, paid_hearts) VALUES (2, 2, 5, 0);
+INSERT INTO public.hearts (id, user_id, free_hearts, paid_hearts) VALUES (3, 3, 5, 0);
+INSERT INTO public.hearts (id, user_id, free_hearts, paid_hearts) VALUES (4, 4, 5, 0);
+INSERT INTO public.hearts (id, user_id, free_hearts, paid_hearts) VALUES (5, 5, 5, 0);
+
+
+--
+-- TOC entry 4638 (class 0 OID 16758)
+-- Dependencies: 231
+-- Data for Name: height; Type: TABLE DATA; Schema: public; Owner: doadmin
+--
+
+INSERT INTO public.height (id, value_enc) VALUES (1, '\xc30d04070302cbcabbd4c449b9d463d2360154ab592933f3f5cc1cda702d636d9a5da20c048d9552adcb0fe8e29086bd6a054dc5df734a7020f1216843f2f8e840e4437f807ffc');
+INSERT INTO public.height (id, value_enc) VALUES (2, '\xc30d040703025062d0a76cc48b3670d2360128ab89e4bf7389524c6684b223e44329cddf5fe54bba260e39d805fcb1207c59f9040fe8754d5f29ceb1a7044f2b4b0eb2207610de');
+INSERT INTO public.height (id, value_enc) VALUES (3, '\xc30d0407030293d01f5c969c8e5872d236016024e88aad16da63d53d10c294926266c49106924ab321293daac8468315acca8a8f16a2ee9cc40216b2a64bae7023c8feb4f0938d');
+INSERT INTO public.height (id, value_enc) VALUES (4, '\xc30d04070302587f311084659e967cd23601b43eac5a5cd996dcd326349bc00ea3f8b4cb2e07a1984ae835690a3e42216aaa98250cec56dc1846acf215acd88a1bf25f68c79c7d');
+INSERT INTO public.height (id, value_enc) VALUES (5, '\xc30d04070302a0666ae7d457e6646ad236013dcc56a058836d450899c8bbb3235ac5e74f9bf4c15095d6034b4e9c7d6ee494646bf63ee20e7950d7804d2f7bf133d2d6649e64d3');
+
+
+--
+-- TOC entry 4646 (class 0 OID 16794)
+-- Dependencies: 239
+-- Data for Name: horoscope_matching; Type: TABLE DATA; Schema: public; Owner: doadmin
+--
+
+INSERT INTO public.horoscope_matching (id, si_enc, ta_enc, en_enc) VALUES (1, '\xc30d040703026c5fe1600541ec0a76d249018a533558055785ca923b0418461194f6eb4a712c2c981571517219f9cdcddf4e698d7a333e228be40b21da165ca243ba1ce96971ba6de01bd86959e1752c65303df29ca28305bcfd', '\xc30d04070302c0a7dd7d6da455df76d23d013168b786c158e1e552c4cf7d59e7d2fd811d348e8f1e1186eeab4109b81ebdbf275259ff8b3cdc5b5c4c143b134bac36eb31451f87c9c7a5b36b7cf1', '\xc30d04070302db27d6528deec95866d2390145a118cb3e05c66e1ce9cddbe1a71e6634cb7d1f9a06b0e36e5b36056d7b1e1427ffb18a741a7c0ca0750ac6e4a41b5ee73c8661db32c3d7');
+INSERT INTO public.horoscope_matching (id, si_enc, ta_enc, en_enc) VALUES (2, '\xc30d04070302f366cb4fa922b1ed61d249017d463787aaf28713002e2d252c34372271c70e50e79fc181d86e14f92fb6f892d7d89679865989f249ad81c4640ab389b9558ff6daccdd526071954205fe7e9d41e43138a2b7f5cf', '\xc30d04070302ba1f08067338e24475d23d01ec51fd8b415188c2a38cff78f5f6498a976311429be71e003eaf48cdcea3b49f39a1fc458d45b203ec8b7f848054a7cd550582040103a871745e5886', '\xc30d0407030240037f89029023cc7cd23901287736cb597617cc4d35b843d14f50f917eef9751c16f5ac702827d5b8b65d670915cc5408a3d5d6e652b8ba610ab4ce9063578b5264201b');
+INSERT INTO public.horoscope_matching (id, si_enc, ta_enc, en_enc) VALUES (3, '\xc30d04070302cd429664e45a50646ed24901ab54d9442b905976661e26981078b0abeff3ebb30d439d426d9332616ba4013738b25639bc8f4e88c0e0223d3b8bd4f1481d57292f695374027af39072e248ac8fd066297caa26b6', '\xc30d040703026f49b8e6e280845767d23d01657cac78c7796580ede1ff49bfe8847fd0c65075aa91223237bba74e9e141f0c814e8c8786f0e0a94aef6ccafb4c39323c50d14158aa7fad4236fae1', '\xc30d04070302ce6b512b0bc5253561d239017a93184b0a4e8ad604eb0856f6701588d5d458657d673848d4f3f81a40563dd9bec24c55deab351b71fb4d2baa22018864bed3a4d45797de');
+INSERT INTO public.horoscope_matching (id, si_enc, ta_enc, en_enc) VALUES (4, '\xc30d04070302995a0097eac6f95478d24901f63e3a83cc3cae4b8af2829a40423e6e620c87637521cfae51d313552af839ceb32ab5d132dd72c1bd9f4228e538ec5b30f41b01fadda85f1933f2fbc47035708f485333977b4ff8', '\xc30d04070302d4ec7398545bd01569d23d011bc7b709b35d2ffec37eb11447c49806f92fca8ce50464f5ad18f52df6c18e4bbe920fe634ea00573fb5d66ef7a70bb50c8f8b5fdd7fe5368c0fb56e', '\xc30d04070302c375e2ac2fe722ca66d2390119c5d10e2a2dfb27bcdc9d02a611d1e7dd3aaae58219d1beb38ab3756671c25a7f16f040ab4a480bfc8772b72c45d56cd0ed6c185e1b7958');
+INSERT INTO public.horoscope_matching (id, si_enc, ta_enc, en_enc) VALUES (5, '\xc30d0407030226bf6b3ace291b6f6ed249010520dc2e8ffe60dc31b2160566f07efe026ed535d297204416a03aaa8d1a70b0772ece1da62985181116c139f069a5a2922beece70fcbbd2204c66264cc3f847bcb7aeeffeccbd64', '\xc30d040703022d2ce707ebeb178366d23d01726fadc533e9f03a39b4774e2a2d58c904c6ed01c1ff625521ea66a260a2d5a566c8c5d158d1bbc558eb106a69e2d87d5d0f3e49303f3664c492a831', '\xc30d04070302d8f89479633146a872d23901c3f86bbf916a4269b80ece2addca572ff3b0cdf824731b412f35738b9e0b052dc272573057b5d7585d30cca3ff6d3588fb40c8d625bd419d');
+
+
+--
+-- TOC entry 4648 (class 0 OID 16803)
+-- Dependencies: 241
+-- Data for Name: interests_list; Type: TABLE DATA; Schema: public; Owner: doadmin
+--
+
+INSERT INTO public.interests_list (id, si_enc, ta_enc, en_enc) VALUES (1, '\xc30d0407030292ce0ac139e44f9961d2430180d048bd8de49649a54bda104f6cc64756621ad331bbdbc6d58106da0a8459d1b03fa6a46bc6302934d642f0328ef1f910e4ac077532123e05c2d7bde3ca32bb9c25', '\xc30d04070302803c7d7c48a9685865d23a01140ffd9159b8ba798199727c365ee4659c319f334ea80cfe440e33850065b9a602e3d391da13651b756aa2277f7dc4eeb774a323f3472f19ea', '\xc30d0407030235d86ac0798856d671d23601e636b6f119759a62ccb6513b6e5a96b8f27e64fd56cd92560262601bda8fb43a6d0aede40b6e790ff826c7513f77d11e06409ba053');
+INSERT INTO public.interests_list (id, si_enc, ta_enc, en_enc) VALUES (2, '\xc30d04070302f5b1e03e02e39dfc65d2430100194cb7a8e563c48432136ffb5ea0ddf1273bd072a331f6fe07da4cdb2890248d25c9c0e315bea69f6e9cdd245c0aa064f46af3dd02be07c3800f66a0376121342e', '\xc30d040703027a1d1770704294006cd23a01150e2587dd30f09c4006a20d9931b3374052cdadc209b079c79a6f4104f8d838787ac2be41d87181180e6fb96ce769a0e6cb0ead95c2ed4ba1', '\xc30d0407030248610b95458e74b367d236019319c74ea65a6e9bcb2f1eeb93167268bf71cb6994ee145f85f1c000191ad86f3f91df1232a44d6b233f9d70672520b0e4366ce58a');
+INSERT INTO public.interests_list (id, si_enc, ta_enc, en_enc) VALUES (3, '\xc30d04070302dc0ad792ec20ddc661d24301ca6943f87d842fe357556dfeb9065dde31b8ca4197120749fa0330b728917a0633287bf866e4cfcaa01a68b219ca94c8615ffba1646e4b238f0ae8c0d19f857617aa', '\xc30d040703025aa3aeb626bedc326ad23a01d59ea1482447ba8239661ae21b62c78ef3599bdb20d8bcfce1e60eb793cb6a1494df575a8cacc7424b77224e51936e659ae8c0e18a9b6def5c', '\xc30d0407030204d685f0d3765a387ed23601c8f95b10d3996790bd60c3569e4ceaae25af4df9fc8086b24cfeffe009856766b5e810981f6032931168c3544e3983c3e3a4cc850d');
+INSERT INTO public.interests_list (id, si_enc, ta_enc, en_enc) VALUES (4, '\xc30d04070302617ba4669eb7393275d24301cd54be00ced3621df1f238bae3fcf5561aca70cadff793a0ba3d14f82b22cfde0a0101c97511b50919b0a4e1641a3eda2def263a120e58e737884e71dc02b09b7bb8', '\xc30d04070302b599db57d1ddb5f66dd23a01184e0ece1189d7a34cb64604507cd12cefd8a547a7128a6fb22845fa2781e6e8b0bf144ae35a757683a3eb6a4b9e4cf7a8b097b881dc0debe6', '\xc30d040703026a11c702c9e1a3f062d23601ea62805d4db6465925c8d8b1f0f98838123442e84b1a40222972e97bfed728708c01b123d185fa637746460fdc9d2d3f7a82c92838');
+INSERT INTO public.interests_list (id, si_enc, ta_enc, en_enc) VALUES (5, '\xc30d04070302d766e4392130a3fb76d24301d75d33bbed80b045b5ae787024ecba7e6f9c49ba27ebcf71a11bcfcce7cbe307d39cc0a4d2e0df6fd9b95490936914daf96077cc735eba0b90d2dd04604e0592deb4', '\xc30d040703026c81a1084f2df2ef66d23a01b3d81af767a2e7a810269f70dcebf98262cb49a7ec8e4ff896a7ed6def779ba0b8fe800d8ec5159fe57747fe0fa13788eb58737cd702c635b9', '\xc30d040703021b824ebb8b6311e070d236015e78231ff099a3f6e8e6d2ae527238396e1888fe6cdc1351303249d53228ef3c3e8f8abb0974c24602472106ae3e55ff0d5d685523');
+
+
+--
+-- TOC entry 4660 (class 0 OID 16952)
+-- Dependencies: 253
+-- Data for Name: packages; Type: TABLE DATA; Schema: public; Owner: doadmin
+--
+
+INSERT INTO public.packages (id, si_enc, ta_enc, en_enc, amount, no_of_hearts, status) VALUES (1, '\xc30d04070302e8d630eba1300e397bd25f010366473ec7c2026986ec2b1e907a43e6de529e05720c8b8e3afafe9e1cdf58047722a5adb625c6469f49b3e7619a63b0e8cab368d192e42c3fbb9ae25e202d21f6bc6077f5cc391f6c38592b3386a5a8b68f90ff563cfdb45524456df839', '\xc30d04070302c7dfa25e6ecff6477fd25d01543260f459f5fd9001b4c2006498d4d43252edd7b030db32f3f186e165f9ccbf6b53aa3ee2a0167cc241b2cc0f075310acbbd0ef48d8043918347cd34f799b28f48f9e731c4ddcea35f159d87f861ed5aa19184b93a741258f72275b', '\xc30d040703026463bb5fcf66783267d242012595196a508154c6d82ee7a80644c6b1d826cd4375574ecc1059fdb5b38b9fe8115c78a47eeeb666e5f1a16c0c933bc68320ac79e6b20fc0264d9d302e62e9e9cd', 10.00, 50, 'active');
+INSERT INTO public.packages (id, si_enc, ta_enc, en_enc, amount, no_of_hearts, status) VALUES (2, '\xc30d0407030200c42653af6518206fd25f01b59a06455d4e23dc96add5ad74398c1e0919d4eefb5dc60d4ed405e13795c1de0c05169709badd106a4ac7e24ab6a18c66a7c553142ee61792ac61dbc3f4dd0c4bf24c3bc63a7ffc765031c5c2184d7b1666e68e9b13515629a16af8e245', '\xc30d040703025ac7c9e1aff579a36ad25d01b654cd86c6437f34979358446aeb4937792a7415fc2ba258983a3e0b04bd02cd4d6e2551c57831bb6f71b159570c76f62d06561bb99e52c109cb2cd8b836ca511a8e55d568deb3bb102d51d7c4e7fde8adaaa33b42c5375b690265ab', '\xc30d040703026867d0da56902bc773d2420199c006c1845d1a32255aba954884d177b39d9f71108cb3189d147e9556efe45161f2d303450ba28256a16adf8c65eedd69103af57d93a81801dee96b28a80a00ab', 10.00, 50, 'active');
+INSERT INTO public.packages (id, si_enc, ta_enc, en_enc, amount, no_of_hearts, status) VALUES (3, '\xc30d04070302e6158430d68e025c6bd25f01383d2b23bf0cce4afb51cf15f1a1461898cefebaf8f9a5e81e01fe783e40254c2b9eb78a3c8c272b48436b33d1eae7b8e30314cf692a487d195da5ce25dc9893de5836cbe60daf63fb996d6da820b8f40624be6cb565c44da31be09fd2ba', '\xc30d04070302322d4ec24dd5f19a77d25d0193aec2b601be018443014e2fcf9da12f15fcde8b12d3c99e6ef813964e864bf0da28341b304f022f6641a807690063495609bb9f5028246465927b193c37515ec2b67ae3156216ea2f2e475d0f2ea00aadc0ca133180009e0c04f33c', '\xc30d040703022d9605cbf4c62ba862d24201f74c89fed29c1e0ac65bde8bbda13e51ee8e5fd21f29d9531b626d5f2e547e6b4a36c7dfd88738025dd5079caefa0992767053a20ffb0e9f1eb5e0751baaab6423', 10.00, 50, 'active');
+INSERT INTO public.packages (id, si_enc, ta_enc, en_enc, amount, no_of_hearts, status) VALUES (4, '\xc30d04070302b809001e6c7f678262d25f01a3fafbb086870ab689aabc8b6926f8e19dad5474c5f8d6c35bf12e8b2c23cb9d3b961c4916f3b932bcf6814e10dddc1c4cf11dbb22f180bd25ef79ea5c4ed29db144b96cfc768057c105c19b989971169defdf3685f50bda40b965e3e15a', '\xc30d04070302363f63f0bf35599c77d25d0179e55d3cad6c13d98f40a8871c4d99679e0c26d71d13dce094ee222f4a430afc9a07fb037187417feb59ef26242f964ecb9411f67e22fa63fd7123578c3bfc07a38ab1582d17b160415bdc5ce4069fc777440d66367b4e62a58878fa', '\xc30d04070302a6ad4200c713ec8a69d2420137257de7711fe08a01ee997e1f339adceeb317ce3148e408dcf468fa8f1724356b6eeb2a70594b8aa4fc2066e003fe521754286c4bf8138c55ef06997c22976347', 10.00, 50, 'active');
+INSERT INTO public.packages (id, si_enc, ta_enc, en_enc, amount, no_of_hearts, status) VALUES (5, '\xc30d0407030218b98dd44505926579d25f01e886a8b2d94e7657cd1c8ffec64b02e6d7b323130def7ea82494031c6160444e2f70901096b2f9c49c06c42feb5f4a1a6a22eae1a75ffa415a648412b04ab329616a0cc21babad20ef99e1a1838bb111494e79419268f7b99c31c68283f6', '\xc30d04070302ed905084c16afb567cd25d01183d83d67c53f0da45306a6da038941f9b2b4962e5edae54d81f13de02c39711cd081be9727055729384305b271f7d0a65a02cd74f72279ce5e9326bb34fec0ee5ab680718b21b179e64558e4e6517c265bcd4a6d35c14992fca1265', '\xc30d04070302fa9e28862e8abf797ed24201eb38f3c88f37b51e14831fb4bae36a64fa43ae68f8f1649066afceb4e2b2e859b392599b89010a6f6df7f2021fbecd49350234d5aa97e9126618055c365e4bfa0b', 10.00, 50, 'active');
+
+
+--
+-- TOC entry 4666 (class 0 OID 17036)
+-- Dependencies: 259
+-- Data for Name: partner_profile; Type: TABLE DATA; Schema: public; Owner: doadmin
+--
+
+INSERT INTO public.partner_profile (id, user_id, min_age, max_age, gender_enc, ethnicity_id, religion_id, edu_level_id, nic_verified, caste_id, civil_status_id, height_id, food_preference_id, drinking_id, smoking_id, horoscope_matching_id) VALUES (2, 1, 25, 35, '\xc30d04070302ca388456f351ed9769d23501bc6a0d08080c32d1eab05322967b0cd795efea832f46dfe7cad853c49369a5c257026000701d310c7a3e820524fcdeda4df2d950', 1, 1, 1, true, 1, 1, 1, 1, 1, 1, 1);
+
+
+--
+-- TOC entry 4636 (class 0 OID 16749)
+-- Dependencies: 229
+-- Data for Name: profession; Type: TABLE DATA; Schema: public; Owner: doadmin
+--
+
+INSERT INTO public.profession (id, si_enc, ta_enc, en_enc) VALUES (1, '\xc30d04070302390b920458db44f977d26901a47be7d7256d5d7f550caa79354ce6bff3ec3b3fed9a9bc84c326aa9bd275564646bb1ede93ab34763e6c178cdc79d402ace21453d4b9271ff90a76a937ceba9679b8391fe96a2373ab1e1e274fd693f44ecf72d10c16b64b8102d62075588151a305ff860fec21d', '\xc30d04070302df92643919042c696dd25901f8a9c9ca30be5cf86f88480d493403638cfacf06c5e0a73a08ab336d947034271035abd554c920106ada8d1e8543a4926fc22de628cd157915d0b67ecd9aaf51499ee4b68a157e2ac1eb43426a1f6d5f5a8f93f8edf4f314', '\xc30d04070302502c5cccbd933e3075d23801460db7f6fe2510be4eb327f2ddebef2ce705c21c8d065e0406e533369e17ba0746cc7b7c8d304697fd9121cdd959288da29f73a976e9f2');
+INSERT INTO public.profession (id, si_enc, ta_enc, en_enc) VALUES (2, '\xc30d0407030270a2779043d536df6ed26901a90480ba96fb6ee92e45cc7f53b37d9db2e5f6d56e2bf52a407423b741b9b62545dc7963e110ceb6643ffc5f058a280ddf4add720e5f15a9aec7c246ee76be13b489f880d85d89cd7d3dc5e03086c43b2e8bf6c129841a37b06433edec4ce1069b33f855ece76798', '\xc30d04070302bac43691fc34e9a97ed25901308f69140d144802307dfd9762b7fc70f5fdcf196ad0fed930d98b436435efad5fef8ab34bdbfdf38b8b6bacbe5c850f8f55196775622896ed8fec6084f419a921364fbcc00a1033b02460b352aa294b87ca601d69434692', '\xc30d04070302bc079c7d448406427ed23801e1f151ff36ee69d880e87da4a7f3bb0a40280e562f7c51db19317f681315942be028120ea4d69bbecc7be3f01324dea411e476555f30c4');
+INSERT INTO public.profession (id, si_enc, ta_enc, en_enc) VALUES (3, '\xc30d040703029327bca20320ecd567d26901c9f22101249f098373e98470c874d8d84989645caf28922ea2d67c27fd4a24b026f4c52eed3b83bd2e20957562867283258f71696d089ffd774e71d5de38aeeab781bcb1d2e6277e6d791b5821ca5bd4114aeb342a815f4afe5fc8efa35f7ffe8e755be486346819', '\xc30d04070302a670f2a3c1e1ddd57ed25901fc97c057b2857fd9027084171aff3a1913f1ba215e712d604ace7b5eaecac7663e2a1d51aa95d686595175f12d2405053d943c3c34da3b2b301f582d7d97a090ddad28a810f9474dbdcb129629fc445d96118926a4595c9a', '\xc30d040703028d57dccf8e685eba7ed238018851b3ca4ad12eeb08acacd0b279c1c4cae6321fe4e0fd33d7b8de63c4b84a653659ce025f5f79551753da6026752559ee03566276545f');
+INSERT INTO public.profession (id, si_enc, ta_enc, en_enc) VALUES (4, '\xc30d04070302e9611970f094364a6cd26901fae1c60ca75adac95821008bc03e370f5f6567537efeb28eeacd88d9a5e718d63e53c5152b034c9243e6c9b57a1af76877eec92dbb971d29b8281a41c8ac5ff1c60f22962d541f142a5cbc4d230d9ae810f5ef2fd330aa6e161376cb5844c6e792302a5d91c213ad', '\xc30d04070302da49899af9cdb09c6ad259017346ff9af2c14fda256428190d45b8766f2fd5c3491f7f1ab1aceb22a44f457e165fb88cb241cc5303d20bb38eb1fcc362332b298fa80a7d9e039be518455b2c544a5a40eb93e3ed8d46ba597d1fec1171cc7a887608eee1', '\xc30d0407030280d47208e7668ec069d238017ed056bb6ab7171df3b284f550eb396fa190eb26c97b718ccabc8380effac78c108b8018de39580d927f4fc5d37b21e703274bfea1f418');
+INSERT INTO public.profession (id, si_enc, ta_enc, en_enc) VALUES (5, '\xc30d040703027e1fc146d297fb4a6dd26901f7d143ee7ed4edffcd6cb6bc96666f25795e40afae678066b90a1a5ec82e804e06233a0b2a6a571eb6364eb79420a9dc859dc7d9c8497f71b6de76d96d84f7be5c15bfd02e67ce72ac6616087b66c86d391500cc719d49a00f7dc837142f267e1549928c1ddd2ab7', '\xc30d040703020df8286658c453ef75d2590132da61da217bcc137573ee14ee92b2e81a46a5f9ff48118cebb229e611cb650f0137521181dbb1ebca82c05b8ad012f88de1acbc58f2cdbf7a2e895981436cbf2a88003eb0e0256a8aa5ca383d7ef3d14f4692b1859012b7', '\xc30d0407030268dcc91719494f0b6cd23801ad7f15c0055d474ca03e9edbec467749b4d9ec92161f9062c2af8d5618cdf3ad751e7bacb57700791f46936b9245d8b421467767bbfe4b');
+
+
+--
+-- TOC entry 4630 (class 0 OID 16722)
+-- Dependencies: 223
+-- Data for Name: religion; Type: TABLE DATA; Schema: public; Owner: doadmin
+--
+
+INSERT INTO public.religion (id, si_enc, ta_enc, en_enc) VALUES (1, '\xc30d04070302e0306e3a9906baed65d249018d555369c6797a6e7e34bde3b2545665d4b3a282a3d1d216b6d68420d74fae4d7d76cd2c77bc781c57c1785d36787e045cb45805dc7a98d63fa896799a66df7b2e4a777c2ce15544', '\xc30d040703024ae78c903de7344f64d24c01a0460eb681c6df232f1c9f0c2e6dda39f1ba93dd2ceffeef34beb194aebe95ec4ce7580ab763a44afc8018bbe3828f2e3db82c148fa515c3096b3e1dc181c86cd8a737913e74fc9e91a297', '\xc30d040703021dab3c4a7a0b71716ad23901781d39a82781d98767082e161c10861c2aac3d4f710be2a22b109a35424841a29225975900d9ff34617c2bb6b16e88fdd0c4fe2c80d523e9');
+INSERT INTO public.religion (id, si_enc, ta_enc, en_enc) VALUES (2, '\xc30d040703022c8f6e54404bf00260d24901ce36640386118ec3f14a380790acd1d3dfa95a4fe564dd1ce982e18ce101993e3278553fdbff4d5704bdc051e9e353b2e6a64a7c4e5580985e3f03535f5660653ef9efbda8e6f33e', '\xc30d04070302de5a434b60cd762d73d24c016f79f9c541aeff7a207d6b1d2a4dbca8d9291ae0e713d13984101c3d7dae171b8e0b8d428d45feda895f275148a918f6acd53a279b8d9cd34f37e33484fd3935d2741cf4e1c8dc5a4832bd', '\xc30d04070302934cf3727630967476d239012b01e14862091f439034e02e4599f6388f8170485b1d0465167de9aa9e320f5993a7aa180760b981a78b09a1d25371968209dabe6b100d21');
+INSERT INTO public.religion (id, si_enc, ta_enc, en_enc) VALUES (3, '\xc30d040703024e46cecdc120f09264d24901c68e53f26f4db2e3a5c0b69f9bb32a857630ac8977861c548d663deb8d09c6f0c29d621e76354a04d281c3e438afd11cee35e9079e0d4564674b74071804f0e032b74dae2db4b2a6', '\xc30d04070302260aa3dd6cd3a52261d24c01dc40a87da54f2484b0ea01a3cae96294c56602b7e7d5039cd1e72aa28b870955cf662ac6932a79e81cf394f7c9974a94782a0b54d7ffb9310ddd914983f7ab1f775354585a3ade9472fb79', '\xc30d04070302ae28bcad606bf94276d2390161ed585bf89972ddc350286a59c9466bc889d46bdb8e2302deec8a4c9d5d1ef6002a714c2e61efb8c45f77152cf89c7eccdbc138ea452392');
+INSERT INTO public.religion (id, si_enc, ta_enc, en_enc) VALUES (4, '\xc30d04070302d27e414269c832b17cd249011fd02936bb6c52cef5c2897d692ee22a04acb11dbcb1e99578e8d2f45258c2dff425319666dfd12acfb9161bdc92c720a9ac75e61f4acef971167fdef2a44a77883ee4e0bfe195bd', '\xc30d0407030226a19c312b640ad576d24c01b969a817f025682df4a19458c964ffa978649e2d0fa9a140b210a47379ff11bedaaf9fbd1b436234b95fc1af763f75e375fe9a60f56b2f8369e03ae9fb84e2b85e546cf6c6762c71305a8c', '\xc30d0407030259c24ffe97e8b7367fd23901ea97271cc80e7795c351c0781dc368f4746fc2184b784945232c643489a1fcdc79e033a62a619eb59e664293515315143730c94a37e9732b');
+INSERT INTO public.religion (id, si_enc, ta_enc, en_enc) VALUES (5, '\xc30d040703025152621ffbd4cf7366d24901a71c0245b7853e591f6ac85ecc55c82edbbea8ce96840bcfbc61db1a4028ac1c300eefd0264d17cf46fc374a80e12451f7cee9fe90065950843bdcb089491e65d1663823013a6ac8', '\xc30d040703021ff72f14730875d87bd24c0166f56ab029a376acf50f2098fc29ed1aaa768d46da682d022af5d9612139edfe6d04e11fed7b5de2ce49b677f9b6fac6608a4248c2eea28f0b4b9759299210d26df12d2c49edbbb5bd2e27', '\xc30d0407030294bb1674e365ca3761d239013359cd4b833fb3a97b7286ad7288d246d7ccfd0cbcd14080af77c7079d103c4bb9a92ddd69cd10cba0d8aadb5b60737dfc7e3abe64f9d16d');
+
+
+--
+-- TOC entry 4664 (class 0 OID 16979)
+-- Dependencies: 257
+-- Data for Name: report_users; Type: TABLE DATA; Schema: public; Owner: doadmin
+--
+
+INSERT INTO public.report_users (id, report_user_id, reporter_id, reason_enc) VALUES (1, 1, 1, '\xc30d04070302cd120d30b570b57a6fd24701c36ee2be10388205b1c5d2f2bf29761500d8b18833feba660344ecdf21f910a86b9fcd0eb7ee728c5f69ebf15b7343cf3c2f15200a86a23138a7e409bfd61b3dfebb835f10c9');
+INSERT INTO public.report_users (id, report_user_id, reporter_id, reason_enc) VALUES (2, 2, 2, '\xc30d040703028ae7f852156e32657cd24701cb9c576d8d78ed0bc39ecc87c1da81611f2d68f6b85b56201052b81be3b70593bd6a5322284497de910cd2e0851c84f594d91790fe57ef18d65c492f092d8a27ecd22a272dcf');
+INSERT INTO public.report_users (id, report_user_id, reporter_id, reason_enc) VALUES (3, 3, 3, '\xc30d040703024b2e44f7c68b54dd60d24701c8bdd1f6b61d65541a9689cd33a7b1fe5271bc36dd1154439cae28e09ecd7d94eec254cccb39be36687442e8d2abdd58d7b3cfc8ea11b9579863c1ee602b968699244388a877');
+INSERT INTO public.report_users (id, report_user_id, reporter_id, reason_enc) VALUES (4, 4, 4, '\xc30d0407030258c6bad0b0c643d765d24701b411fa25da94690340a5a0a9179c96cc65586567c5521d00d0220108958b36798e5126244cb33c677da67494a4905785d376fa04ae892881a457840f51466db1155cb3deac5f');
+INSERT INTO public.report_users (id, report_user_id, reporter_id, reason_enc) VALUES (5, 5, 5, '\xc30d04070302311dcf8bea7252f46ad2470112aee16a091e4c58f1905c4a8b7ae461945a49b4d7850e65e06f1e77f34e7bd3760bcbe23b701a1ba107d04a4a5c237bc9b480eee8b24a58040c9911b17ec611b172814975a1');
+
+
+--
+-- TOC entry 4667 (class 0 OID 17108)
+-- Dependencies: 260
+-- Data for Name: session; Type: TABLE DATA; Schema: public; Owner: doadmin
+--
+
+INSERT INTO public.session (sid, sess, expire) VALUES ('Syq2LIV4mAT7WOsSZaD3Fn9zkW1CLyB2', '{"cookie":{"originalMaxAge":86400000,"expires":"2025-01-09T02:40:21.571Z","secure":false,"httpOnly":true,"path":"/"},"views":11,"pii":"49918ec9a9c70893f1cbd5bf062c3ebc:66e8559e65aa2045eb4aafd78e4fbf934170f8ab75617f3626330073d39389a7c097842598467ae4a8075c4aa3b769b1bad157520ec40804e6a1605e767be91d335160f53da45f655f0981c66040babc0d97aab9f02caf222754c707bfd7eff9"}', '2025-01-09 02:40:22');
+
+
+--
+-- TOC entry 4644 (class 0 OID 16785)
+-- Dependencies: 237
+-- Data for Name: smoking; Type: TABLE DATA; Schema: public; Owner: doadmin
+--
+
+INSERT INTO public.smoking (id, si_enc, ta_enc, en_enc) VALUES (1, '\xc30d04070302b6c3760261136d0e76d23a01b302a88b8c85b12d8b508e194b832c2b1da0584ad4611e165b09b94f65bd01d63cbf37e76b5270a3a07f14b33b38b5fe5807413af2e3ff6b69', '\xc30d0407030270012bac8caefc9a6bd240011d32ba1d4b869ecacd78dfd7e59dfa7fb618a961065b85507bfc371472406cb98ff1b38d71852a05c4491afbc254c55f7f7f5b87321159fbc1f60f0119c6f4', '\xc30d04070302794c3ae72486c92a73d23301c8a3b4b3f8e3f55963b51175a5138bc4611fe5b67ab1596213d117f99999135ee3b2a4a540cda90d5baff5bbb0a921cc0ac5');
+INSERT INTO public.smoking (id, si_enc, ta_enc, en_enc) VALUES (2, '\xc30d04070302470dff73d3c18a1b68d23a016fc119f753b35caa7db219f01f071400d4bad5839199239e25077b16758de188194f536f51131df3996842fe6d927351dfc286404aa1f446c8', '\xc30d0407030295f85b98377ef4b779d2400198de5c85c9c15e0a6fb79e58a38b7969e6e23852d50dcb9a81634a1570b6fed2e12cc8211e9d026f54a6a7f35eb0456c50d5641d799012cfa3b4872d5d2a5f', '\xc30d040703028782c1141e07385161d23301a4f83455cbfc95b2e8d1ca18d97ef6cac273f21a4f2cbb5e2ef0ed348fc4d5f751b7c8a6594112cdc737b5f460d1fe27bd81');
+INSERT INTO public.smoking (id, si_enc, ta_enc, en_enc) VALUES (3, '\xc30d040703026d64d5056486c84276d23a01d3ed384e2f3559de2baee89b1e1eff78ff2e36e89e301bafd7ca9b5458602c2236de4dbcdc545a12058f968d6ec792169d88dee1754e38911a', '\xc30d04070302b2ced095f1eda96d69d24001cec3b00ccc92ffe7d7871e05ec92ad06e8102fadb946f74ff65c030b89bdcfefeaae56b92fc54613eb74fae320139fe73fa2897cfb1a161475c6da1c2159c6', '\xc30d04070302cd4d3420d61cb91563d23301ea6a398f4e0c89ea27602d0c4c3bccd619a476c99ec64dd82f8bf7571d3b3c33aab46ebdc3a49e5cf7aa7b82b463d1e79060');
+INSERT INTO public.smoking (id, si_enc, ta_enc, en_enc) VALUES (4, '\xc30d04070302562e9b1d6614e82f6ad23a0150bf6ec876342740daedf9704615fe5da23d0aba49a30c61f8f920c3e11c168602374857e958a87a2a9a90686752a4abc289dd35dd88371af6', '\xc30d04070302e0d8bc4b6a4479b37cd240013ac191d0a1bf1174d972486d5b311b5766f926158a999593c8bed4312621427de392a34594a115cae62b43c64fb0b47760cd6ad5ef1096871402a3c7fa9af2', '\xc30d0407030289745215942abae96fd233010401f4c51632805cb730e028a366ce152e46514976f8748e822472f8599571dd2c587406b008827060310b2a9366f6cb98c7');
+INSERT INTO public.smoking (id, si_enc, ta_enc, en_enc) VALUES (5, '\xc30d04070302210177f8458fb6617dd23a01cd7cb678a89552bf0b398a25fc1ea0f831a0ec453153df91c8c09d8fb56fbbf374bc4b864473b56b1a1392b240ffca0bd6a665fa9a589380d1', '\xc30d04070302fa4c9708fbe487d177d24001ed4249a0804a3850151f04b9c965c86bd5da0cee684761bb98e6dff1a946dcb948ba7d5684ac667a0052c293506ab33f5affda804fbd88ff2e34a5e39d4545', '\xc30d0407030244c85bac263b96b866d23301cf323b46deb37279b9650f6f4eb6d3e402fb92420d50fe81c7e35fd227e68a85101baa63d763b07d1c16db47fa40e71af663');
+
+
+--
+-- TOC entry 4662 (class 0 OID 16961)
+-- Dependencies: 255
+-- Data for Name: transactions; Type: TABLE DATA; Schema: public; Owner: doadmin
+--
+
+INSERT INTO public.transactions (id, user_id, package_id, amount, no_of_hearts, created_at) VALUES (1, 1, 1, 10.00, 50, '2024-12-30 13:44:23.717878');
+INSERT INTO public.transactions (id, user_id, package_id, amount, no_of_hearts, created_at) VALUES (2, 2, 2, 10.00, 50, '2025-01-05 14:52:28.489676');
+INSERT INTO public.transactions (id, user_id, package_id, amount, no_of_hearts, created_at) VALUES (3, 3, 3, 10.00, 50, '2025-01-05 14:53:26.430904');
+INSERT INTO public.transactions (id, user_id, package_id, amount, no_of_hearts, created_at) VALUES (4, 4, 4, 10.00, 50, '2025-01-05 15:00:50.303191');
+INSERT INTO public.transactions (id, user_id, package_id, amount, no_of_hearts, created_at) VALUES (5, 5, 5, 10.00, 50, '2025-01-05 15:08:48.629405');
+
+
+--
+-- TOC entry 4652 (class 0 OID 16826)
+-- Dependencies: 245
+-- Data for Name: user; Type: TABLE DATA; Schema: public; Owner: doadmin
+--
+
+INSERT INTO public."user" (id, first_name_enc, dob_enc, gender_enc, ethnicity_id, religion_id, edu_level_id, country_id, city_id, caste_id, civil_status_id, profession_id, height_id, food_preference_id, drinking_id, smoking_id, horoscope_matching_id, male_siblings, female_siblings, nic_enc, bio_enc, status, nic_verified) VALUES (1, '\xc30d040703022d52a35996b465a266d23501b8532f1ab77872c1704159b56607197f3f01cefd314f9a05692dcd2e28847318d000babfbadbcfd08b4aefdb7ef49b58a25753e5', '\xc30d04070302ceb0fd8e40bd4b6464d23b017f7737bd6c4a48141d870b5ac0941d489c60dd005806654263d48ab7aa884f63197066cd08708fca6329c8376cdd4f526b0320732c6a8abe810f', '\xc30d04070302aca1050c058fd1e17bd235016d010bb24cc80826c321b0cf03b363feffc7f3b95eb5a2880ac49fe1575f3969215333c853794c37847ab1c764ff1ba42197c56a', 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, '\xc30d04070302882ebdba434f8c116ad23b0127ac7f83401b9b120519f5a3cb6a62ff63892466b399117833d727a5b70efab94d1b653a2a3ef5dbb47c0b4f55532c634627391573f7fd1a7d20', '\xc30d040703025687d79aba3e712e61d253015f933c3615a4f5da07c315b4627f5bbe238b466a7c033b347f31662a500566fede9c43e7bb3ecada72cf97efdf08990fa67425014f54e5b7e6d8281ee72b09d8d3b2df065f9c8d771a4eda82b1cc995135be', 'active', true);
+INSERT INTO public."user" (id, first_name_enc, dob_enc, gender_enc, ethnicity_id, religion_id, edu_level_id, country_id, city_id, caste_id, civil_status_id, profession_id, height_id, food_preference_id, drinking_id, smoking_id, horoscope_matching_id, male_siblings, female_siblings, nic_enc, bio_enc, status, nic_verified) VALUES (2, '\xc30d04070302aacc6556efb0d6b36ed23901b58ad16389976856d5f58592833f03d0197f5218d9838ca8d339f8ebd789e9bbb2f96f8d667445914980f1e2a943c45c71a21610666748be', '\xc30d040703025ab2282f20a285756ed23b01ebbcf3d71dd82b2d125545cd71592834a16a8b04876c7338f896029c40381b28727e0baf7ce371ff14750834a2da7d440177518e03b9adfe717c', '\xc30d04070302755f433a727668b76dd23501521c339e1adf59e050f4acee5ed204375624ae4e41fcabef8e84e1d0b64b12cc40025e92959e3bff78b66aba0ea8e4223845065b', 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, '\xc30d04070302bb32d6b734b0062271d23b010099d7d76210ff47599b4df2d1a2e88e75379613224085791854cc55cd3d6e733d4a6b1801f95823f4b03fc64a59efcb9c59ada151e27d56c5f3', '\xc30d04070302938e104bc939e6a263d24d01bfb2267ae1b295883ec489adc62ea992d553ca8e1858d6d5206f75b8c69256e2c6867093644002135a0aad1110ad557c091632121057443ade3bbaf7307a4867eec1239f9d34be1913a15292', 'active', true);
+INSERT INTO public."user" (id, first_name_enc, dob_enc, gender_enc, ethnicity_id, religion_id, edu_level_id, country_id, city_id, caste_id, civil_status_id, profession_id, height_id, food_preference_id, drinking_id, smoking_id, horoscope_matching_id, male_siblings, female_siblings, nic_enc, bio_enc, status, nic_verified) VALUES (3, '\xc30d04070302707e51190c70f37676d239017e1f68097471796c620e7ab6000045ae955365ce1b2e09b4bcdc7310c291fd0144cca9ccfbb3685c081fbf386780d01fa3c255f815fa6081', '\xc30d0407030290916f71172c5c496ed23b01c1e366e7f6cb23f1d1f3d315b8fe2923243ebedca1df2e6ddb00c78b9356606e760cc4a0518ffd8ebbc0607935b15440d0f169cee8721c9ae033', '\xc30d04070302e259ad321c56927262d2350180c27713b1ad19a31047bc20b5c166ce9b933dfa3a68fc179d313f9778ccb9b571c22fc2d75a72b7b86712016707448bf21840f2', 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, '\xc30d040703025b94da1cff8c67ab71d23b01a2ed24765c2b24e82282432c74287a3f13293fc2089173d7433264a9bb4f3f08da8a8303a38fb227cd4b694705b63052ea90bba2cdaec891ca71', '\xc30d04070302863fb460c03ff70f73d24d01d997fd1bcffc22b87a276e355fa0b95657a0cfde6cf7ddecf49214b9118379396bab4f3fcec795bf089ad33b6174331052bd7e8db2ee245c276514b15c469d45128304b72fe20275b2bcedca', 'active', true);
+INSERT INTO public."user" (id, first_name_enc, dob_enc, gender_enc, ethnicity_id, religion_id, edu_level_id, country_id, city_id, caste_id, civil_status_id, profession_id, height_id, food_preference_id, drinking_id, smoking_id, horoscope_matching_id, male_siblings, female_siblings, nic_enc, bio_enc, status, nic_verified) VALUES (4, '\xc30d04070302d2eb946bacaf122a6dd23b0196cc4872267bf3f2f502eb402fac11b5b724195850522ee99b24967e797159023fe9fe0451247b4d200abff768543b742f69784ab54750ee9fec', '\xc30d04070302ea510487a12de5217ad23b01409b4edc47e37b1a250127b04036e2693129829ab7a5f4f1050af7366e5b008f8996781d1d27d6d3510a8720d9d27e9d140e7a670d121697df41', '\xc30d04070302484140bbdb4d95de76d23701d54ef4c1ae266a211ece19b5cf71d0077988fa4ce65fb342256780cd21c0fef4b6f8f10bdd9ab693bcbced5c868768b068804a4706f0', 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, '\xc30d04070302debe7bdc8c5ddce17cd23b0114d7b6ceeae0e82394f1d71f007270da9d460d1fce5474ded32c4471fdd422411f5cd34fd703be4b47b5e7eda12ec34d694dab498610480f82f0', '\xc30d04070302086c2affbc43aba864d24d01adb52cb7dde09d56d50ec1f2da16ec5ddc9e560cf2d0a5ad402686a2a61a611d62fc4d5fde4277cc67c604a74f212f4045023eb9a44f1c8af33c9197c5814185d9c8864034ae1433b0da3a28', 'active', true);
+INSERT INTO public."user" (id, first_name_enc, dob_enc, gender_enc, ethnicity_id, religion_id, edu_level_id, country_id, city_id, caste_id, civil_status_id, profession_id, height_id, food_preference_id, drinking_id, smoking_id, horoscope_matching_id, male_siblings, female_siblings, nic_enc, bio_enc, status, nic_verified) VALUES (5, '\xc30d04070302b534fd5cdee533f678d23b014b77512d5b43e20c5b2f221f200400a5e4340b5e218e25db1bf50c9905ddf62a2a14b12189eff3c12302eefff14f49ce59c39c13647f4a63f653', '\xc30d040703020141839da2e681f16fd23b018e88711c6ff61b8547d4500b4b948427effb6edaa942d744549b042bba515f18699a2ee23fc50734023a794d30835f0a7af2ed125f5708fc57dc', '\xc30d040703025b600677cf684ab16ed2350178a1c628fbef8cc23724338b26a12b358a0b7ff52ed4eaa2fd3e30ecd6f74eef7223d507a9a1576b1a7cad1f91ed83048de3a0b6', 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, '\xc30d04070302c0f61eddb9370cd773d23b01c39c992e48864a90d58ba9a1a39612eba83b17b4a56f05bd91a31a020268914e212c49e4dc108b11be11b53445be773f3b95f19cae23ab937704', '\xc30d04070302ad9274e5d0dd839f6dd24d01defd97202a7d1ea5f857498f7260f425d36126a240b629df2a4ae9cb75cc0561f9c596339a2cd8f589bfa903024e37460db84669ca4f1160195e9b1f10a635fca9bbadefb6fa2e1caff08105', 'active', true);
+
+
+--
+-- TOC entry 4654 (class 0 OID 16903)
+-- Dependencies: 247
+-- Data for Name: user_interests; Type: TABLE DATA; Schema: public; Owner: doadmin
+--
+
+INSERT INTO public.user_interests (id, user_id, interest_id) VALUES (1, 1, 1);
+INSERT INTO public.user_interests (id, user_id, interest_id) VALUES (2, 2, 2);
+INSERT INTO public.user_interests (id, user_id, interest_id) VALUES (3, 3, 3);
+INSERT INTO public.user_interests (id, user_id, interest_id) VALUES (4, 4, 4);
+INSERT INTO public.user_interests (id, user_id, interest_id) VALUES (5, 5, 5);
+
+
+--
+-- TOC entry 4658 (class 0 OID 16934)
+-- Dependencies: 251
+-- Data for Name: user_requests; Type: TABLE DATA; Schema: public; Owner: doadmin
+--
+
+INSERT INTO public.user_requests (id, sender_id, receiver_id, created_at) VALUES (1, 1, 1, '2024-12-30 13:44:23.717878');
+INSERT INTO public.user_requests (id, sender_id, receiver_id, created_at) VALUES (2, 2, 2, '2025-01-05 14:52:28.489676');
+INSERT INTO public.user_requests (id, sender_id, receiver_id, created_at) VALUES (3, 3, 3, '2025-01-05 14:53:26.430904');
+INSERT INTO public.user_requests (id, sender_id, receiver_id, created_at) VALUES (4, 4, 4, '2025-01-05 15:00:50.303191');
+INSERT INTO public.user_requests (id, sender_id, receiver_id, created_at) VALUES (5, 5, 5, '2025-01-05 15:08:48.629405');
+
+
+--
+-- TOC entry 4669 (class 0 OID 17117)
+-- Dependencies: 262
+-- Data for Name: users; Type: TABLE DATA; Schema: public; Owner: doadmin
+--
+
+INSERT INTO public.users (id, name, dob) VALUES (1, '\xc30d040703029e2ba723c182663062d239018e53101e164845d276b8b74dcd0ca45cc4077ea809e2fd0992feb04d1bc8e21d9f4cef654e69e45ff8dcf59edacab0d71f860c1371648d0d', '1990-01-01');
+
+
+--
+-- TOC entry 4699 (class 0 OID 0)
+-- Dependencies: 242
+-- Name: caste_id_seq; Type: SEQUENCE SET; Schema: public; Owner: doadmin
+--
+
+SELECT pg_catalog.setval('public.caste_id_seq', 5, true);
+
+
+--
+-- TOC entry 4700 (class 0 OID 0)
+-- Dependencies: 218
+-- Name: city_id_seq; Type: SEQUENCE SET; Schema: public; Owner: doadmin
+--
+
+SELECT pg_catalog.setval('public.city_id_seq', 5, true);
+
+
+--
+-- TOC entry 4701 (class 0 OID 0)
+-- Dependencies: 226
+-- Name: civil_status_id_seq; Type: SEQUENCE SET; Schema: public; Owner: doadmin
+--
+
+SELECT pg_catalog.setval('public.civil_status_id_seq', 5, true);
+
+
+--
+-- TOC entry 4702 (class 0 OID 0)
+-- Dependencies: 216
+-- Name: country_id_seq; Type: SEQUENCE SET; Schema: public; Owner: doadmin
+--
+
+SELECT pg_catalog.setval('public.country_id_seq', 6, true);
+
+
+--
+-- TOC entry 4703 (class 0 OID 0)
+-- Dependencies: 234
+-- Name: drinking_id_seq; Type: SEQUENCE SET; Schema: public; Owner: doadmin
+--
+
+SELECT pg_catalog.setval('public.drinking_id_seq', 5, true);
+
+
+--
+-- TOC entry 4704 (class 0 OID 0)
+-- Dependencies: 224
+-- Name: edu_level_id_seq; Type: SEQUENCE SET; Schema: public; Owner: doadmin
+--
+
+SELECT pg_catalog.setval('public.edu_level_id_seq', 5, true);
+
+
+--
+-- TOC entry 4705 (class 0 OID 0)
+-- Dependencies: 220
+-- Name: ethnicity_id_seq; Type: SEQUENCE SET; Schema: public; Owner: doadmin
+--
+
+SELECT pg_catalog.setval('public.ethnicity_id_seq', 5, true);
+
+
+--
+-- TOC entry 4706 (class 0 OID 0)
+-- Dependencies: 232
+-- Name: food_preference_id_seq; Type: SEQUENCE SET; Schema: public; Owner: doadmin
+--
+
+SELECT pg_catalog.setval('public.food_preference_id_seq', 5, true);
+
+
+--
+-- TOC entry 4707 (class 0 OID 0)
+-- Dependencies: 248
+-- Name: hearts_id_seq; Type: SEQUENCE SET; Schema: public; Owner: doadmin
+--
+
+SELECT pg_catalog.setval('public.hearts_id_seq', 5, true);
+
+
+--
+-- TOC entry 4708 (class 0 OID 0)
+-- Dependencies: 230
+-- Name: height_id_seq; Type: SEQUENCE SET; Schema: public; Owner: doadmin
+--
+
+SELECT pg_catalog.setval('public.height_id_seq', 5, true);
+
+
+--
+-- TOC entry 4709 (class 0 OID 0)
+-- Dependencies: 238
+-- Name: horoscope_matching_id_seq; Type: SEQUENCE SET; Schema: public; Owner: doadmin
+--
+
+SELECT pg_catalog.setval('public.horoscope_matching_id_seq', 5, true);
+
+
+--
+-- TOC entry 4710 (class 0 OID 0)
+-- Dependencies: 240
+-- Name: interests_list_id_seq; Type: SEQUENCE SET; Schema: public; Owner: doadmin
+--
+
+SELECT pg_catalog.setval('public.interests_list_id_seq', 5, true);
+
+
+--
+-- TOC entry 4711 (class 0 OID 0)
+-- Dependencies: 252
+-- Name: packages_id_seq; Type: SEQUENCE SET; Schema: public; Owner: doadmin
+--
+
+SELECT pg_catalog.setval('public.packages_id_seq', 5, true);
+
+
+--
+-- TOC entry 4712 (class 0 OID 0)
+-- Dependencies: 258
+-- Name: partner_profile_id_seq; Type: SEQUENCE SET; Schema: public; Owner: doadmin
+--
+
+SELECT pg_catalog.setval('public.partner_profile_id_seq', 2, true);
+
+
+--
+-- TOC entry 4713 (class 0 OID 0)
+-- Dependencies: 228
+-- Name: profession_id_seq; Type: SEQUENCE SET; Schema: public; Owner: doadmin
+--
+
+SELECT pg_catalog.setval('public.profession_id_seq', 5, true);
+
+
+--
+-- TOC entry 4714 (class 0 OID 0)
+-- Dependencies: 222
+-- Name: religion_id_seq; Type: SEQUENCE SET; Schema: public; Owner: doadmin
+--
+
+SELECT pg_catalog.setval('public.religion_id_seq', 5, true);
+
+
+--
+-- TOC entry 4715 (class 0 OID 0)
+-- Dependencies: 256
+-- Name: report_users_id_seq; Type: SEQUENCE SET; Schema: public; Owner: doadmin
+--
+
+SELECT pg_catalog.setval('public.report_users_id_seq', 5, true);
+
+
+--
+-- TOC entry 4716 (class 0 OID 0)
+-- Dependencies: 236
+-- Name: smoking_id_seq; Type: SEQUENCE SET; Schema: public; Owner: doadmin
+--
+
+SELECT pg_catalog.setval('public.smoking_id_seq', 5, true);
+
+
+--
+-- TOC entry 4717 (class 0 OID 0)
+-- Dependencies: 254
+-- Name: transactions_id_seq; Type: SEQUENCE SET; Schema: public; Owner: doadmin
+--
+
+SELECT pg_catalog.setval('public.transactions_id_seq', 5, true);
+
+
+--
+-- TOC entry 4718 (class 0 OID 0)
+-- Dependencies: 244
+-- Name: user_id_seq; Type: SEQUENCE SET; Schema: public; Owner: doadmin
+--
+
+SELECT pg_catalog.setval('public.user_id_seq', 5, true);
+
+
+--
+-- TOC entry 4719 (class 0 OID 0)
+-- Dependencies: 246
+-- Name: user_interests_id_seq; Type: SEQUENCE SET; Schema: public; Owner: doadmin
+--
+
+SELECT pg_catalog.setval('public.user_interests_id_seq', 5, true);
+
+
+--
+-- TOC entry 4720 (class 0 OID 0)
+-- Dependencies: 250
+-- Name: user_requests_id_seq; Type: SEQUENCE SET; Schema: public; Owner: doadmin
+--
+
+SELECT pg_catalog.setval('public.user_requests_id_seq', 5, true);
+
+
+--
+-- TOC entry 4721 (class 0 OID 0)
+-- Dependencies: 261
+-- Name: users_id_seq; Type: SEQUENCE SET; Schema: public; Owner: doadmin
+--
+
+SELECT pg_catalog.setval('public.users_id_seq', 1, true);
+
+
+--
+-- TOC entry 4423 (class 2606 OID 16819)
+-- Name: caste caste_pkey; Type: CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.caste
+    ADD CONSTRAINT caste_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4399 (class 2606 OID 16706)
+-- Name: city city_pkey; Type: CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.city
+    ADD CONSTRAINT city_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4407 (class 2606 OID 16747)
+-- Name: civil_status civil_status_pkey; Type: CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.civil_status
+    ADD CONSTRAINT civil_status_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4397 (class 2606 OID 16697)
+-- Name: country country_pkey; Type: CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.country
+    ADD CONSTRAINT country_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4415 (class 2606 OID 16783)
+-- Name: drinking drinking_pkey; Type: CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.drinking
+    ADD CONSTRAINT drinking_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4405 (class 2606 OID 16738)
+-- Name: edu_level edu_level_pkey; Type: CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.edu_level
+    ADD CONSTRAINT edu_level_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4401 (class 2606 OID 16720)
+-- Name: ethnicity ethnicity_pkey; Type: CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.ethnicity
+    ADD CONSTRAINT ethnicity_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4413 (class 2606 OID 16774)
+-- Name: food_preference food_preference_pkey; Type: CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.food_preference
+    ADD CONSTRAINT food_preference_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4429 (class 2606 OID 16927)
+-- Name: hearts hearts_pkey; Type: CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.hearts
+    ADD CONSTRAINT hearts_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4411 (class 2606 OID 16765)
+-- Name: height height_pkey; Type: CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.height
+    ADD CONSTRAINT height_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4419 (class 2606 OID 16801)
+-- Name: horoscope_matching horoscope_matching_pkey; Type: CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.horoscope_matching
+    ADD CONSTRAINT horoscope_matching_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4421 (class 2606 OID 16810)
+-- Name: interests_list interests_list_pkey; Type: CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.interests_list
+    ADD CONSTRAINT interests_list_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4433 (class 2606 OID 16959)
+-- Name: packages packages_pkey; Type: CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.packages
+    ADD CONSTRAINT packages_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4439 (class 2606 OID 17044)
+-- Name: partner_profile partner_profile_pkey; Type: CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.partner_profile
+    ADD CONSTRAINT partner_profile_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4409 (class 2606 OID 16756)
+-- Name: profession profession_pkey; Type: CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.profession
+    ADD CONSTRAINT profession_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4403 (class 2606 OID 16729)
+-- Name: religion religion_pkey; Type: CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.religion
+    ADD CONSTRAINT religion_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4437 (class 2606 OID 16986)
+-- Name: report_users report_users_pkey; Type: CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.report_users
+    ADD CONSTRAINT report_users_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4442 (class 2606 OID 17114)
+-- Name: session session_pkey; Type: CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.session
+    ADD CONSTRAINT session_pkey PRIMARY KEY (sid);
+
+
+--
+-- TOC entry 4417 (class 2606 OID 16792)
+-- Name: smoking smoking_pkey; Type: CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.smoking
+    ADD CONSTRAINT smoking_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4435 (class 2606 OID 16967)
+-- Name: transactions transactions_pkey; Type: CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.transactions
+    ADD CONSTRAINT transactions_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4427 (class 2606 OID 16908)
+-- Name: user_interests user_interests_pkey; Type: CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.user_interests
+    ADD CONSTRAINT user_interests_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4425 (class 2606 OID 16836)
+-- Name: user user_pkey; Type: CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public."user"
+    ADD CONSTRAINT user_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4431 (class 2606 OID 16940)
+-- Name: user_requests user_requests_pkey; Type: CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.user_requests
+    ADD CONSTRAINT user_requests_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4444 (class 2606 OID 17124)
+-- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4440 (class 1259 OID 17115)
+-- Name: IDX_session_expire; Type: INDEX; Schema: public; Owner: doadmin
+--
+
+CREATE INDEX "IDX_session_expire" ON public.session USING btree (expire);
+
+
+--
+-- TOC entry 4446 (class 2606 OID 16820)
+-- Name: caste caste_ethnicity_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.caste
+    ADD CONSTRAINT caste_ethnicity_id_fkey FOREIGN KEY (ethnicity_id) REFERENCES public.ethnicity(id);
+
+
+--
+-- TOC entry 4445 (class 2606 OID 16707)
+-- Name: city city_country_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.city
+    ADD CONSTRAINT city_country_id_fkey FOREIGN KEY (country_id) REFERENCES public.country(id);
+
+
+--
+-- TOC entry 4462 (class 2606 OID 16928)
+-- Name: hearts hearts_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.hearts
+    ADD CONSTRAINT hearts_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id);
+
+
+--
+-- TOC entry 4469 (class 2606 OID 17065)
+-- Name: partner_profile partner_profile_caste_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.partner_profile
+    ADD CONSTRAINT partner_profile_caste_id_fkey FOREIGN KEY (caste_id) REFERENCES public.caste(id);
+
+
+--
+-- TOC entry 4470 (class 2606 OID 17070)
+-- Name: partner_profile partner_profile_civil_status_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.partner_profile
+    ADD CONSTRAINT partner_profile_civil_status_id_fkey FOREIGN KEY (civil_status_id) REFERENCES public.civil_status(id);
+
+
+--
+-- TOC entry 4471 (class 2606 OID 17085)
+-- Name: partner_profile partner_profile_drinking_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.partner_profile
+    ADD CONSTRAINT partner_profile_drinking_id_fkey FOREIGN KEY (drinking_id) REFERENCES public.drinking(id);
+
+
+--
+-- TOC entry 4472 (class 2606 OID 17060)
+-- Name: partner_profile partner_profile_edu_level_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.partner_profile
+    ADD CONSTRAINT partner_profile_edu_level_id_fkey FOREIGN KEY (edu_level_id) REFERENCES public.edu_level(id);
+
+
+--
+-- TOC entry 4473 (class 2606 OID 17050)
+-- Name: partner_profile partner_profile_ethnicity_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.partner_profile
+    ADD CONSTRAINT partner_profile_ethnicity_id_fkey FOREIGN KEY (ethnicity_id) REFERENCES public.ethnicity(id);
+
+
+--
+-- TOC entry 4474 (class 2606 OID 17080)
+-- Name: partner_profile partner_profile_food_preference_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.partner_profile
+    ADD CONSTRAINT partner_profile_food_preference_id_fkey FOREIGN KEY (food_preference_id) REFERENCES public.food_preference(id);
+
+
+--
+-- TOC entry 4475 (class 2606 OID 17075)
+-- Name: partner_profile partner_profile_height_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.partner_profile
+    ADD CONSTRAINT partner_profile_height_id_fkey FOREIGN KEY (height_id) REFERENCES public.height(id);
+
+
+--
+-- TOC entry 4476 (class 2606 OID 17095)
+-- Name: partner_profile partner_profile_horoscope_matching_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.partner_profile
+    ADD CONSTRAINT partner_profile_horoscope_matching_id_fkey FOREIGN KEY (horoscope_matching_id) REFERENCES public.horoscope_matching(id);
+
+
+--
+-- TOC entry 4477 (class 2606 OID 17055)
+-- Name: partner_profile partner_profile_religion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.partner_profile
+    ADD CONSTRAINT partner_profile_religion_id_fkey FOREIGN KEY (religion_id) REFERENCES public.religion(id);
+
+
+--
+-- TOC entry 4478 (class 2606 OID 17090)
+-- Name: partner_profile partner_profile_smoking_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.partner_profile
+    ADD CONSTRAINT partner_profile_smoking_id_fkey FOREIGN KEY (smoking_id) REFERENCES public.smoking(id);
+
+
+--
+-- TOC entry 4479 (class 2606 OID 17045)
+-- Name: partner_profile partner_profile_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.partner_profile
+    ADD CONSTRAINT partner_profile_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id);
+
+
+--
+-- TOC entry 4467 (class 2606 OID 16987)
+-- Name: report_users report_users_report_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.report_users
+    ADD CONSTRAINT report_users_report_user_id_fkey FOREIGN KEY (report_user_id) REFERENCES public."user"(id);
+
+
+--
+-- TOC entry 4468 (class 2606 OID 16992)
+-- Name: report_users report_users_reporter_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.report_users
+    ADD CONSTRAINT report_users_reporter_id_fkey FOREIGN KEY (reporter_id) REFERENCES public."user"(id);
+
+
+--
+-- TOC entry 4465 (class 2606 OID 16973)
+-- Name: transactions transactions_package_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.transactions
+    ADD CONSTRAINT transactions_package_id_fkey FOREIGN KEY (package_id) REFERENCES public.packages(id);
+
+
+--
+-- TOC entry 4466 (class 2606 OID 16968)
+-- Name: transactions transactions_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.transactions
+    ADD CONSTRAINT transactions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id);
+
+
+--
+-- TOC entry 4447 (class 2606 OID 16862)
+-- Name: user user_caste_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public."user"
+    ADD CONSTRAINT user_caste_id_fkey FOREIGN KEY (caste_id) REFERENCES public.caste(id);
+
+
+--
+-- TOC entry 4448 (class 2606 OID 16857)
+-- Name: user user_city_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public."user"
+    ADD CONSTRAINT user_city_id_fkey FOREIGN KEY (city_id) REFERENCES public.city(id);
+
+
+--
+-- TOC entry 4449 (class 2606 OID 16867)
+-- Name: user user_civil_status_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public."user"
+    ADD CONSTRAINT user_civil_status_id_fkey FOREIGN KEY (civil_status_id) REFERENCES public.civil_status(id);
+
+
+--
+-- TOC entry 4450 (class 2606 OID 16852)
+-- Name: user user_country_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public."user"
+    ADD CONSTRAINT user_country_id_fkey FOREIGN KEY (country_id) REFERENCES public.country(id);
+
+
+--
+-- TOC entry 4451 (class 2606 OID 16887)
+-- Name: user user_drinking_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public."user"
+    ADD CONSTRAINT user_drinking_id_fkey FOREIGN KEY (drinking_id) REFERENCES public.drinking(id);
+
+
+--
+-- TOC entry 4452 (class 2606 OID 16847)
+-- Name: user user_edu_level_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public."user"
+    ADD CONSTRAINT user_edu_level_id_fkey FOREIGN KEY (edu_level_id) REFERENCES public.edu_level(id);
+
+
+--
+-- TOC entry 4453 (class 2606 OID 16837)
+-- Name: user user_ethnicity_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public."user"
+    ADD CONSTRAINT user_ethnicity_id_fkey FOREIGN KEY (ethnicity_id) REFERENCES public.ethnicity(id);
+
+
+--
+-- TOC entry 4454 (class 2606 OID 16882)
+-- Name: user user_food_preference_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public."user"
+    ADD CONSTRAINT user_food_preference_id_fkey FOREIGN KEY (food_preference_id) REFERENCES public.food_preference(id);
+
+
+--
+-- TOC entry 4455 (class 2606 OID 16877)
+-- Name: user user_height_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public."user"
+    ADD CONSTRAINT user_height_id_fkey FOREIGN KEY (height_id) REFERENCES public.height(id);
+
+
+--
+-- TOC entry 4456 (class 2606 OID 16897)
+-- Name: user user_horoscope_matching_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public."user"
+    ADD CONSTRAINT user_horoscope_matching_id_fkey FOREIGN KEY (horoscope_matching_id) REFERENCES public.horoscope_matching(id);
+
+
+--
+-- TOC entry 4460 (class 2606 OID 16914)
+-- Name: user_interests user_interests_interest_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.user_interests
+    ADD CONSTRAINT user_interests_interest_id_fkey FOREIGN KEY (interest_id) REFERENCES public.interests_list(id);
+
+
+--
+-- TOC entry 4461 (class 2606 OID 16909)
+-- Name: user_interests user_interests_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.user_interests
+    ADD CONSTRAINT user_interests_user_id_fkey FOREIGN KEY (user_id) REFERENCES public."user"(id);
+
+
+--
+-- TOC entry 4457 (class 2606 OID 16872)
+-- Name: user user_profession_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public."user"
+    ADD CONSTRAINT user_profession_id_fkey FOREIGN KEY (profession_id) REFERENCES public.profession(id);
+
+
+--
+-- TOC entry 4458 (class 2606 OID 16842)
+-- Name: user user_religion_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public."user"
+    ADD CONSTRAINT user_religion_id_fkey FOREIGN KEY (religion_id) REFERENCES public.religion(id);
+
+
+--
+-- TOC entry 4463 (class 2606 OID 16946)
+-- Name: user_requests user_requests_receiver_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.user_requests
+    ADD CONSTRAINT user_requests_receiver_id_fkey FOREIGN KEY (receiver_id) REFERENCES public."user"(id);
+
+
+--
+-- TOC entry 4464 (class 2606 OID 16941)
+-- Name: user_requests user_requests_sender_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public.user_requests
+    ADD CONSTRAINT user_requests_sender_id_fkey FOREIGN KEY (sender_id) REFERENCES public."user"(id);
+
+
+--
+-- TOC entry 4459 (class 2606 OID 16892)
+-- Name: user user_smoking_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: doadmin
+--
+
+ALTER TABLE ONLY public."user"
+    ADD CONSTRAINT user_smoking_id_fkey FOREIGN KEY (smoking_id) REFERENCES public.smoking(id);
+
+
+-- Completed on 2025-01-23 08:48:01 +0530
+
+--
+-- PostgreSQL database dump complete
+--
+
