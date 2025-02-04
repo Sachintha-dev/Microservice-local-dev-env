@@ -34,8 +34,7 @@ service:
       receivers: [otlp]
       processors: [batch]
       exporters: [otlphttp]
-
-telemetry:
-  metrics:
-    address: "0.0.0.0:8888" # Exposes internal collector telemetry on port 8888 for Prometheus
-    level: basic
+# telemetry:
+#   metrics:
+#     address: "0.0.0.0:8888"
+#     level: basic

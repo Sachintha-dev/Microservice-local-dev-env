@@ -167,9 +167,8 @@ services:
     networks:
       - monitoring
 
-  # Update OTEL Collector to export to Zipkin
   ###########################################################################
-  # UPDATE OTEL COLLECTOR TO EXPORT TO TEMPO
+  # OTEL COLLECTOR TO EXPORT TO TEMPO
   ###########################################################################
   otel-collector:
     image: otel/opentelemetry-collector:latest
